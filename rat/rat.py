@@ -124,7 +124,8 @@ def cmdline_clean(args):
 
 def export(experiment, path):
     files = get_file_ids_for_experiment(experiment)
-    utils.load_file_tree(grid, path, files)
+    return utils.load_file_tree(grid, path, files)
+
 
 
 def cmdline_export(args):
@@ -133,11 +134,30 @@ def cmdline_export(args):
         with tempfile.TemporaryDirectory() as path:
             export(exp, path)
             utils.system_call('open ' + path)
-            print('press any key to exit')
+            print('>', end=' ')
             sys.stdin.read(1)
     else:
         path = args.path
         export(exp, path)
+
+
+def tensorboard(experiment, port):
+    with tempfile.TemporaryDirectory() as path:
+        export(experiment, path)
+        import tensorflow as tf
+        from tensorflow.tensorboard.tensorboard import main as tbmain
+        flags = tf.app.flags.FLAGS
+        flags.port = port
+        flags.logdir = ",".join(c['_id'] + ':' + os.path.join(path, experiment['_id'], '{}/logs'.format(c['_id'])) for c in experiment['configs'])
+        tbmain()
+
+
+
+def cmdline_tb(args):
+    port = args.port
+    exp = find_experiment(args.search_string)
+    tensorboard(exp, port)
+
 
 
 def main():
@@ -172,6 +192,11 @@ def main():
         parser_export.add_argument('-p', '--path', help="the directory to export to", default='.')
         parser_export.add_argument('-t', '--temp', action='store_true', help='export to a temporary folder')
         parser_export.set_defaults(func=cmdline_export)
+
+        parser_tb = subparsers.add_parser("tb", help="open tensorboard")
+        parser_tb.add_argument('search_string')
+        parser_tb.add_argument('-p', '--port', default=6006, type=int)
+        parser_tb.set_defaults(func=cmdline_tb)
 
         args = parser.parse_args()
 

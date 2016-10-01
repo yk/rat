@@ -79,6 +79,7 @@ def save_file_tree(grid, base_dir, filenames, experiment_id, config_id):
     return fids
 
 def load_file_tree(grid, base_dir, file_ids):
+    files = []
     for fid in file_ids:
         gfile = grid.get(ObjectId(fid))
         fn = gfile.name or str(gfile._id)
@@ -88,6 +89,8 @@ def load_file_tree(grid, base_dir, file_ids):
         logging.info("restoring %s as %s", fn, local_abs_path)
         with open(local_abs_path, 'wb') as f:
             f.write(gfile.read())
+        files.append((fid, fn, local_abs_path))
+    return files
 
 def display_continuous(str_func, interval=5):
     scr = curses.initscr()

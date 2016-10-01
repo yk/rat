@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from rcfile import rcfile
+import tempfile
 import curses
 import itertools
 import logging
@@ -18,6 +19,8 @@ from bson import ObjectId
 rat_config = rcfile('rat')
 db, grid = utils.get_mongo(rat_config)
 rq = utils.get_redis(rat_config)
+
+logging.root.setLevel(logging.INFO)
 
 
 def run_config(experiment, config_id, configspec):
@@ -62,9 +65,9 @@ def find_experiment_id(search_string, raise_if_none=True):
 
 
 def delete(experiment):
-    orphans = get_files_for_experiment(experiment)
+    orphans = get_file_ids_for_experiment(experiment)
     delete_grid_files(orphans)
-    db.experiments.remove(experiment_id)
+    db.experiments.remove(experiment['_id'])
 
 
 def cmdline_delete(args):
@@ -92,23 +95,27 @@ def cmdline_status(args):
 
 
 def get_files_for_experiment(experiment):
-    return list(itertools.chain.from_iterable(map(lambda c: map(lambda f: ObjectId(f[1]), itertools.chain(c.get('files', []), c.get('resultfiles', []))), experiment['configs'])))
+    return list(itertools.chain.from_iterable(map(lambda c: map(lambda f: (f[0], ObjectId(f[1])), itertools.chain(c.get('files', []), c.get('resultfiles', []))), experiment['configs'])))
 
 
+def get_file_ids_for_experiment(experiment):
+    fs = get_files_for_experiment(experiment)
+    return [f[1] for f in fs]
 
-def delete_grid_files(files):
+
+def delete_grid_files(file_ids):
     no = 0
-    for n, o in enumerate(files):
+    for n, o in enumerate(file_ids):
         no = n
-        grid.delete(o._id)
+        grid.delete(o)
     return no
 
 
 
 def clean():
-    fileids = list(itertools.chain.from_iterable(map(lambda e: get_files_for_experiment(e), db.experiments.find({}, {'configs.files': 1, 'configs.resultfiles': 1}))))
+    fileids = list(itertools.chain.from_iterable(map(lambda e: get_file_ids_for_experiment(e), db.experiments.find({}, {'configs.files': 1, 'configs.resultfiles': 1}))))
     orphans = grid.find({'_id': {'$nin': fileids}})
-    return delete_grid_files(orphans)
+    return delete_grid_files([o._id for o in orphans])
 
 def cmdline_clean(args):
     num_del = clean()
@@ -116,13 +123,21 @@ def cmdline_clean(args):
 
 
 def export(experiment, path):
-    pass # XXX
+    files = get_file_ids_for_experiment(experiment)
+    utils.load_file_tree(grid, path, files)
 
 
 def cmdline_export(args):
     exp = find_experiment(args.search_string)
-    path = args.path
-    export(exp, path)
+    if args.temp:
+        with tempfile.TemporaryDirectory() as path:
+            export(exp, path)
+            utils.system_call('open ' + path)
+            print('press any key to exit')
+            sys.stdin.read(1)
+    else:
+        path = args.path
+        export(exp, path)
 
 
 def main():
@@ -154,7 +169,8 @@ def main():
 
         parser_export = subparsers.add_parser("export", help="export an experiment")
         parser_export.add_argument('search_string')
-        parser_export.add_argument('path', default='.')
+        parser_export.add_argument('-p', '--path', help="the directory to export to", default='.')
+        parser_export.add_argument('-t', '--temp', action='store_true', help='export to a temporary folder')
         parser_export.set_defaults(func=cmdline_export)
 
         args = parser.parse_args()

@@ -28,13 +28,13 @@ def get_config_dir(eid, cid):
 
 def run_config(rat_config, experiment, config):
     logging.info('running experiment {}, config {}'.format(experiment['_id'], config['_id']))
-    config_dir = get_config_dir(experiment['_id'], config['_id'])
     db, grid = utils.get_mongo(rat_config)
 
-    utils.load_file_tree(grid, config_dir, config['files'])
+    utils.load_file_tree(grid, get_experiments_dir(), [f[1] for f in config['files']])
 
     db.experiments.update({'_id': experiment['_id'], 'configs._id': config['_id']}, {'$set': {'configs.$.status': Status.running}})
     main_file = config['spec']['main_file']
+    config_dir = get_config_dir(experiment['_id'], config['_id'])
     os.chdir(config_dir)
     start_time = time.time()
     utils.system_call('python3 {} > stdout.txt 2> stderr.txt'.format(main_file))

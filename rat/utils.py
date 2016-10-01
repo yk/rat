@@ -73,19 +73,20 @@ def save_file_tree(grid, base_dir, filenames, experiment_id, config_id):
         db_path = os.path.join(experiment_id, config_id, fn)
         logging.info("saving %s from %s as %s", fn, abs_fn, db_path)
         with open(abs_fn, 'rb') as f:
-            fid = grid.put(f, name=db_path)
+            fid = grid.put(f, filename=db_path)
             fid = str(fid)
         fids.append(fid)
     return fids
 
-def load_file_tree(grid, base_dir, filenames_and_ids):
-    for fn, fid in filenames_and_ids:
-        local_abs_path = os.path.join(base_dir, fn) 
-        folder_path = os.path.join(*local_abs_path.split('/')[:-1])
+def load_file_tree(grid, base_dir, file_ids):
+    for fid in file_ids:
+        gfile = grid.get(ObjectId(fid))
+        fn = gfile.name or str(gfile._id)
+        local_abs_path = os.path.abspath(os.path.join(base_dir, fn) )
+        folder_path, _ = os.path.split(local_abs_path)
         os.makedirs(folder_path, exist_ok=True)
         logging.info("restoring %s as %s", fn, local_abs_path)
         with open(local_abs_path, 'wb') as f:
-            gfile = grid.get(ObjectId(fid))
             f.write(gfile.read())
 
 def display_continuous(str_func, interval=5):

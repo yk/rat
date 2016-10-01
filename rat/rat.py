@@ -13,6 +13,7 @@ from rat import worker
 from rat import utils
 from rat.utils import Status
 from terminaltables import AsciiTable
+from bson import ObjectId
 
 rat_config = rcfile('rat')
 db, grid = utils.get_mongo(rat_config)
@@ -46,8 +47,29 @@ def run_experiment(configs, name=None):
         run_config(experiment, str(cid), config)
 
 
-def cmdline_find(args):
-    pass
+def find_experiment(search_string, raise_if_none=True):
+    e = db.experiments.find_one({'_id': {'$regex': '^{}'.format(search_string)}})
+    if raise_if_none and not e:
+        raise Exception('Experiment {} not found'.format(search_string))
+    return e
+
+
+def find_experiment_id(search_string, raise_if_none=True):
+    e = db.experiments.find_one({'_id': {'$regex': '^{}'.format(search_string)}}, {'_id': 1})
+    if raise_if_none and not e:
+        raise Exception('Experiment {} not found'.format(search_string))
+    return e
+
+
+def delete(experiment):
+    orphans = get_files_for_experiment(experiment)
+    delete_grid_files(orphans)
+    db.experiments.remove(experiment_id)
+
+
+def cmdline_delete(args):
+    exp = find_experiment(args.search_string)
+    delete(exp)
 
 
 def status():
@@ -69,55 +91,83 @@ def cmdline_status(args):
         print(get_table())
 
 
-def clean():
-    fileids = list(itertools.chain.from_iterable(map(lambda e: list(itertools.chain.from_iterable(map(lambda c: map(lambda f: f[1], itertools.chain(c.get('files', []), c.get('resultfiles', []))), e['configs']))), db.experiments.find({}, {'configs.files': 1, 'configs.resultfiles': 1}))))
-    orphans = grid.find({'_id': {'$nin': fileids}})
+def get_files_for_experiment(experiment):
+    return list(itertools.chain.from_iterable(map(lambda c: map(lambda f: ObjectId(f[1]), itertools.chain(c.get('files', []), c.get('resultfiles', []))), experiment['configs'])))
+
+
+
+def delete_grid_files(files):
     no = 0
-    for n, o in enumerate(orphans):
+    for n, o in enumerate(files):
         no = n
         grid.delete(o._id)
     return no
 
+
+
+def clean():
+    fileids = list(itertools.chain.from_iterable(map(lambda e: get_files_for_experiment(e), db.experiments.find({}, {'configs.files': 1, 'configs.resultfiles': 1}))))
+    orphans = grid.find({'_id': {'$nin': fileids}})
+    return delete_grid_files(orphans)
+
 def cmdline_clean(args):
     num_del = clean()
-    print('{} items deleted'.format(num_del))
+    print('{} orphans deleted'.format(num_del))
+
+
+def export(experiment, path):
+    pass # XXX
+
+
+def cmdline_export(args):
+    exp = find_experiment(args.search_string)
+    path = args.path
+    export(exp, path)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Experiment running tool")
+    try:
+        parser = argparse.ArgumentParser(description="Experiment running tool")
 
-    subparsers = parser.add_subparsers(dest="command", help="command")
+        subparsers = parser.add_subparsers(dest="command", help="command")
 
-    no_args_dict = {
-        'clean': ('clean up saved experiments', cmdline_clean),
-    }
+        no_args_dict = {
+            'clean': ('clean up saved experiments', cmdline_clean),
+        }
 
-    for k, v in no_args_dict.items():
-        sp = subparsers.add_parser(k, help=v[0])
-        sp.set_defaults(func=v[1])
+        for k, v in no_args_dict.items():
+            sp = subparsers.add_parser(k, help=v[0])
+            sp.set_defaults(func=v[1])
 
-    parser_status = subparsers.add_parser("status", help='display status of running experiments')
-    parser_status.add_argument('-f', '--follow', action='store_true', help='continuously output status')
-    parser_status.set_defaults(func=cmdline_status)
+        parser_status = subparsers.add_parser("status", help='display status of running experiments')
+        parser_status.add_argument('-f', '--follow', action='store_true', help='continuously output status')
+        parser_status.set_defaults(func=cmdline_status)
 
-    # parser_run = subparsers.add_parser("run", help="run an experiment")
-    # parser_run.add_argument('experiment_file')
-    # parser_run.add_argument('-s', '--shuffle', action='store_true', help="shuffle the created configurations before distributing")
-    # parser_run.set_defaults(func=run)
+        # parser_run = subparsers.add_parser("run", help="run an experiment")
+        # parser_run.add_argument('experiment_file')
+        # parser_run.add_argument('-s', '--shuffle', action='store_true', help="shuffle the created configurations before distributing")
+        # parser_run.set_defaults(func=run)
 
-    parser_find = subparsers.add_parser("find", help="find experiments")
-    parser_find.add_argument('search_string')
-    parser_find.set_defaults(func=cmdline_find)
+        parser_delete = subparsers.add_parser("delete", help="delete an experiment")
+        parser_delete.add_argument('search_string')
+        parser_delete.set_defaults(func=cmdline_delete)
 
-    args = parser.parse_args()
+        parser_export = subparsers.add_parser("export", help="export an experiment")
+        parser_export.add_argument('search_string')
+        parser_export.add_argument('path', default='.')
+        parser_export.set_defaults(func=cmdline_export)
 
-    command = args.command
-    if hasattr(args, 'func'):
-        args.func(args)
-    else:
-        parser.parse_args(['-h'])
-        exit(1)
-    exit(0)
+        args = parser.parse_args()
+
+        command = args.command
+        if hasattr(args, 'func'):
+            args.func(args)
+        else:
+            parser.parse_args(['-h'])
+            exit(1)
+        exit(0)
+    finally:
+        utils.close_mongo()  # ugly
 
 if __name__ == '__main__':
     main()

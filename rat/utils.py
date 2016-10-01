@@ -9,6 +9,8 @@ from enum import IntEnum
 import logging
 import curses
 
+mongo_client = None
+
 
 class Status(IntEnum):
     enqueued = 1
@@ -53,10 +55,15 @@ def get_redis(config):
 
 
 def get_mongo(config):
-    mongo_client = MongoClient(host=config.get('mongo_host', 'localhost'), port=int(config.get('mongo_port', '27017')))
+    global mongo_client
+    mongo_client = mongo_client or MongoClient(host=config.get('mongo_host', 'localhost'), port=int(config.get('mongo_port', '27017')))
     mongo_db = mongo_client[config.get('mongo_db', 'rat')]
     mongo_grid = GridFS(mongo_db, collection="testfs")
     return mongo_db, mongo_grid
+
+
+def close_mongo():
+    mongo_client.close()
 
 
 def save_file_tree(grid, base_dir, filenames, experiment_id, config_id):

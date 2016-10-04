@@ -5,6 +5,41 @@ import time
 from rat.utils import Status
 import logging
 import tempfile
+import signal
+from rq import Worker
+
+
+class TermWorker(Worker):
+
+    def request_force_force_stop(self, signum, frame):
+        """Terminates the application (cold shutdown)."""
+        self.log.warning('Cold shut down')
+
+        if self.horse_pid:
+            msg = 'Taking down horse {0} with me'.format(self.horse_pid)
+            self.log.debug(msg)
+            try:
+                os.kill(self.horse_pid, signal.SIGKILL)
+            except OSError as e:
+                if e.errno != errno.ESRCH:
+                    self.log.debug('Horse already down')
+                    raise
+        raise SystemExit()
+
+    def request_force_stop(self, signum, frame):
+        """Terminates the application (semi cold shutdown)."""
+        self.log.warning('Semi cold shut down')
+
+        signal.signal(signal.SIGTERM, self.request_force_force_stop)
+
+        if self.horse_pid:
+            msg = 'Semi Taking down horse {0} with me'.format(self.horse_pid)
+            self.log.debug(msg)
+            try:
+                os.kill(self.horse_pid, signal.SIGTERM)
+                os.waitpid(self.horse_pid, 0)
+            except ChildProcessError:
+                pass
 
 
 def run_config(rat_config, experiment, config):
@@ -22,9 +57,12 @@ def run_config(rat_config, experiment, config):
         # utils.system_call('python3 {} > stdout.txt 2> stderr.txt'.format(main_file))
         flags = utils.dict_to_flags(config['spec'])
         process = utils.async_system_call('python3 {} {}'.format(main_file, flags))
+        def handler(signum, frame):
+            process.terminate()
+        signal.signal(signal.SIGTERM, handler)
         try:
             process.wait()
-        except KeyboardInterrupt:
+        except:
             # process.kill()
             process.terminate()
 

@@ -29,7 +29,7 @@ def system_call(cmd, raise_on_error=True):
 
 
 def async_system_call(cmd):
-    p = subprocess.Popen([cmd])
+    p = subprocess.Popen(cmd.strip().split(' '), cwd=os.getcwd())
     return p
 
 

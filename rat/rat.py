@@ -14,11 +14,12 @@ from rat import worker
 from rat import utils
 from rat.utils import Status
 from terminaltables import AsciiTable
+from multiprocessing import Process
 from bson import ObjectId
 
 rat_config = rcfile('rat')
 db, grid = utils.get_mongo(rat_config)
-rq = utils.get_redis(rat_config)
+rqueue = utils.get_redis(rat_config)
 
 logging.root.setLevel(logging.INFO)
 
@@ -26,14 +27,14 @@ logging.root.setLevel(logging.INFO)
 def run_config(experiment, config_id, configspec):
     cwd = os.getcwd()
     ls = utils.get_all_files(cwd)
-    fids = utils.save_file_tree(grid, cwd, ls, experiment['_id'], config_id)
+    fids = utils.save_file_tree(grid, cwd, ls)
     config = dict(spec=configspec)
     config['_id'] = config_id
-    config['files'] = list(zip(ls, fids))
+    config['files'] = fids
     config['status'] = Status.enqueued
     db.experiments.update({'_id': experiment['_id']}, {'$push': {'configs': config}})
 
-    rq.enqueue(worker.run_config, rat_config, experiment, config)
+    rqueue.enqueue(worker.run_config, rat_config, experiment, config)
 
 def run_experiment(configs, name=None):
     exp_id = str(uuid.uuid4())
@@ -94,13 +95,8 @@ def cmdline_status(args):
         print(get_table())
 
 
-def get_files_for_experiment(experiment):
-    return list(itertools.chain.from_iterable(map(lambda c: map(lambda f: (f[0], ObjectId(f[1])), itertools.chain(c.get('files', []), c.get('resultfiles', []))), experiment['configs'])))
-
-
 def get_file_ids_for_experiment(experiment):
-    fs = get_files_for_experiment(experiment)
-    return [f[1] for f in fs]
+    return list(itertools.chain.from_iterable(map(lambda c: map(lambda f: ObjectId(f), itertools.chain(c.get('files', []), c.get('resultfiles', []))), experiment['configs'])))
 
 
 def delete_grid_files(file_ids):
@@ -141,15 +137,45 @@ def cmdline_export(args):
         export(exp, path)
 
 
+def wait_and_tail_logs(experiment, config, path):
+    utils.wait_for_running(db, experiment['_id'], config['_id'])
+    cpath = os.path.join(path, config['_id'])
+    host, rpath = config['host'], config['path']
+    utils.rsync_remote_folder(host, rpath, cpath)
+    clogsdir = os.path.join(cpath, 'logs')
+    tfefn = next(f for f in os.listdir(clogsdir) if 'tfevents' in f)
+    utils.tail_remote_file(host, os.path.join(rpath, 'logs', tfefn), os.path.join(cpath, 'logs', tfefn))
+
+
 def tensorboard(experiment, port):
     with tempfile.TemporaryDirectory() as path:
         export(experiment, path)
+        done_configs = []
+        not_done_configs = []
+        for c in experiment['configs']:
+            s = Status(c['status'])
+            if s == Status.done:
+                done_configs.append(c)
+            elif s < Status.done:
+                not_done_configs.append(c)
+        processes = []
+        for c in not_done_configs:
+            p = Process(target=wait_and_tail_logs, args=(experiment, c))
+            p.start()
+            processes.append(p)
         import tensorflow as tf
         from tensorflow.tensorboard.tensorboard import main as tbmain
         flags = tf.app.flags.FLAGS
         flags.port = port
-        flags.logdir = ",".join(c['_id'] + ':' + os.path.join(path, experiment['_id'], '{}/logs'.format(c['_id'])) for c in experiment['configs'])
-        tbmain()
+        done_configs_logdirs = [c['_id'] + ':' + os.path.join(path, c['_id'], 'logs') for c in (done_configs + running_configs)]
+        flags.logdir = ",".join(done_configs_logdirs)
+        flags.reload_interval = 10
+        try:
+            tbmain()
+        finally:
+            for p in processes:
+                logging.info('terminating %s', str(p))
+                p.terminate()
 
 
 

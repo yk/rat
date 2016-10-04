@@ -66,14 +66,13 @@ def close_mongo():
     mongo_client.close()
 
 
-def save_file_tree(grid, base_dir, filenames, experiment_id, config_id):
+def save_file_tree(grid, base_dir, filenames):
     fids = []
     for fn in filenames:
         abs_fn = os.path.join(base_dir, fn)
-        db_path = os.path.join(experiment_id, config_id, fn)
-        logging.info("saving %s from %s as %s", fn, abs_fn, db_path)
+        logging.info("saving %s from %s", fn, abs_fn)
         with open(abs_fn, 'rb') as f:
-            fid = grid.put(f, filename=db_path)
+            fid = grid.put(f, filename=fn)
             fid = str(fid)
         fids.append(fid)
     return fids
@@ -103,3 +102,33 @@ def display_continuous(str_func, interval=5):
         except KeyboardInterrupt:
             break
     curses.endwin()
+
+
+def rsync_remote_folder(host, remote_path, local_path):
+    cmd = 'rsync -avz "{}:{}/*" {}/'.format(host, remote_path, local_path)
+    system_call(cmd)
+
+
+def wait_for_running(db, experiment_id, config_id, interval=10):
+    while True:
+        exp = db.experiments.find_one({'_id': experiment_id})
+        try:
+            c = next(c for c in exp['configs'] if c['_id'] == config_id and c['status'] == Status.running)
+            break
+        except StopIteration:
+            time.sleep(interval)
+    return c
+
+
+def tail_remote_file(host, remote_path, local_path):
+    cmd = 'unbuffer ssh {} "tail -qf -c+0 {} | base64" | base64 --decode > "{}"'.format(host, remote_path, local_path)
+    system_call(cmd, False)
+
+
+def dict_to_flags(d : dict):
+    return " ".join(['--{}="{}"'.format(k, v) for k, v in d.items()])
+
+
+def dict_to_with(d : dict):
+    return " ".join(['with {}="{}"'.format(k, v) for k, v in d.items()])
+

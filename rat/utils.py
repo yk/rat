@@ -127,7 +127,7 @@ def tail_remote_file(host, remote_path, local_path):
 
 
 def dict_to_flags(d : dict):
-    return " ".join(['--{}="{}"'.format(k, v) for k, v in d.items()])
+    return " ".join(['--{}="{}"'.format(k, v) for k, v in d.items() if not k == 'main_file'])
 
 
 def dict_to_with(d : dict):

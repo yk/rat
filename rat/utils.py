@@ -8,6 +8,7 @@ from bson import ObjectId
 from enum import IntEnum
 import logging
 import curses
+import subprocess
 
 mongo_client = None
 
@@ -25,6 +26,11 @@ def system_call(cmd, raise_on_error=True):
     if status != 0 and raise_on_error:
         raise Exception("System call failed: {}".format(cmd))
     return status
+
+
+def async_system_call(cmd):
+    p = subprocess.Popen([cmd])
+    return p
 
 
 def echo(s):
@@ -115,15 +121,20 @@ def wait_for_running(db, experiment_id, config_id, interval=10):
         exp = db.experiments.find_one({'_id': experiment_id})
         try:
             c = next(c for c in exp['configs'] if c['_id'] == config_id and c['status'] == Status.running)
+            logging.info('{} is running'.format(config_id))
             break
         except StopIteration:
             time.sleep(interval)
     return c
 
 
-def tail_remote_file(host, remote_path, local_path):
-    cmd = 'unbuffer ssh {} "tail -qf -c+0 {} | base64" | base64 --decode > "{}"'.format(host, remote_path, local_path)
-    system_call(cmd, False)
+def tail_remote_file(host, remote_path, local_path, interval=5):
+    # cmd = 'unbuffer ssh {} "tail -qf -c+0 {} | base64" | gbase64 --decode -i > "{}"'.format(host, remote_path, local_path)
+    # system_call(cmd, False)
+    while True:
+        cmd = 'rsync {}:{} {}'.format(host, remote_path, local_path)
+        system_call(cmd)
+        time.sleep(interval)
 
 
 def dict_to_flags(d : dict):

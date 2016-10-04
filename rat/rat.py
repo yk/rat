@@ -15,6 +15,7 @@ from rat import utils
 from rat.utils import Status
 from terminaltables import AsciiTable
 from multiprocessing import Process
+from threading import Thread
 from bson import ObjectId
 
 rat_config = rcfile('rat')
@@ -99,6 +100,10 @@ def get_file_ids_for_experiment(experiment):
     return list(itertools.chain.from_iterable(map(lambda c: map(lambda f: ObjectId(f), itertools.chain(c.get('files', []), c.get('resultfiles', []))), experiment['configs'])))
 
 
+def get_file_ids_for_config(config):
+    return list(map(lambda f: ObjectId(f), itertools.chain(config.get('files', []), config.get('resultfiles', []))))
+
+
 def delete_grid_files(file_ids):
     no = 0
     for n, o in enumerate(file_ids):
@@ -118,8 +123,13 @@ def cmdline_clean(args):
     print('{} orphans deleted'.format(num_del))
 
 
-def export(experiment, path):
-    files = get_file_ids_for_experiment(experiment)
+def export_experiment(experiment, path):
+    for c in experiment['configs']:
+        export_config(c, os.path.join(path, c['_id']))
+
+
+def export_config(config, path):
+    files = get_file_ids_for_config(config)
     return utils.load_file_tree(grid, path, files)
 
 
@@ -128,31 +138,32 @@ def cmdline_export(args):
     exp = find_experiment(args.search_string)
     if args.temp:
         with tempfile.TemporaryDirectory() as path:
-            export(exp, path)
+            export_experiment(exp, path)
             utils.system_call('open ' + path)
             print('>', end=' ')
             sys.stdin.read(1)
     else:
         path = args.path
-        export(exp, path)
+        export_experiment(exp, path)
 
 
 def wait_and_tail_logs(experiment, config, path):
-    utils.wait_for_running(db, experiment['_id'], config['_id'])
+    config = utils.wait_for_running(db, experiment['_id'], config['_id'])
     cpath = os.path.join(path, config['_id'])
     host, rpath = config['host'], config['path']
     utils.rsync_remote_folder(host, rpath, cpath)
     clogsdir = os.path.join(cpath, 'logs')
     tfefn = next(f for f in os.listdir(clogsdir) if 'tfevents' in f)
+    logging.info('tailing %s from config %s', tfefn, config['_id'])
     utils.tail_remote_file(host, os.path.join(rpath, 'logs', tfefn), os.path.join(cpath, 'logs', tfefn))
 
 
 def tensorboard(experiment, port):
     with tempfile.TemporaryDirectory() as path:
-        export(experiment, path)
         done_configs = []
         not_done_configs = []
         for c in experiment['configs']:
+            export_config(c, os.path.join(path, c['_id']))
             s = Status(c['status'])
             if s == Status.done:
                 done_configs.append(c)
@@ -160,22 +171,24 @@ def tensorboard(experiment, port):
                 not_done_configs.append(c)
         processes = []
         for c in not_done_configs:
-            p = Process(target=wait_and_tail_logs, args=(experiment, c))
+            # p = Process(target=wait_and_tail_logs, args=(experiment, c, path))
+            p = Thread(target=wait_and_tail_logs, args=(experiment, c, path))
             p.start()
             processes.append(p)
         import tensorflow as tf
         from tensorflow.tensorboard.tensorboard import main as tbmain
         flags = tf.app.flags.FLAGS
         flags.port = port
-        done_configs_logdirs = [c['_id'] + ':' + os.path.join(path, c['_id'], 'logs') for c in (done_configs + running_configs)]
+        done_configs_logdirs = [c['_id'] + ':' + os.path.join(path, c['_id'], 'logs') for c in (done_configs + not_done_configs)]
         flags.logdir = ",".join(done_configs_logdirs)
         flags.reload_interval = 10
         try:
             tbmain()
         finally:
-            for p in processes:
-                logging.info('terminating %s', str(p))
-                p.terminate()
+            pass
+            # for p in processes:
+                # logging.info('terminating %s', str(p))
+                # p.terminate()
 
 
 

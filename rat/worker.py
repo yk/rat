@@ -21,7 +21,12 @@ def run_config(rat_config, experiment, config):
         start_time = time.time()
         # utils.system_call('python3 {} > stdout.txt 2> stderr.txt'.format(main_file))
         flags = utils.dict_to_flags(config['spec'])
-        utils.system_call('python3 {} {}'.format(main_file, flags))
+        process = utils.async_system_call('python3 {} {}'.format(main_file, flags))
+        try:
+            process.wait()
+        except KeyboardInterrupt:
+            # process.kill()
+            process.terminate()
 
         all_files = utils.get_all_files(path)
         new_fns = [fn for fn in all_files if os.path.getmtime(fn) > start_time]

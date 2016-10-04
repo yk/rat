@@ -80,7 +80,8 @@ def save_file_tree(grid, base_dir, filenames):
 def load_file_tree(grid, base_dir, file_ids):
     files = []
     for fid in file_ids:
-        gfile = grid.get(ObjectId(fid))
+        print(fid)
+        gfile = grid.get(fid if isinstance(fid, ObjectId) else ObjectId(fid))
         fn = gfile.name or str(gfile._id)
         local_abs_path = os.path.abspath(os.path.join(base_dir, fn) )
         folder_path, _ = os.path.split(local_abs_path)

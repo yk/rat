@@ -132,13 +132,13 @@ def tail_remote_file(host, remote_path, local_path, interval=5):
     # cmd = 'unbuffer ssh {} "tail -qf -c+0 {} | base64" | gbase64 --decode -i > "{}"'.format(host, remote_path, local_path)
     # system_call(cmd, False)
     while True:
-        cmd = 'rsync {}:{} {}'.format(host, remote_path, local_path)
+        cmd = 'rsync -a {}:{} {}'.format(host, remote_path, local_path)
         system_call(cmd)
         time.sleep(interval)
 
 
 def dict_to_flags(d : dict):
-    return " ".join(['--{}="{}"'.format(k, v) for k, v in d.items() if not k == 'main_file'])
+    return " ".join(['--{0}={2}{1}{2}'.format(k, v, '"' if isinstance(v, str) else '') for k, v in d.items() if not k == 'main_file'])
 
 
 def dict_to_with(d : dict):

@@ -155,7 +155,7 @@ def wait_and_tail_logs(experiment, config, path):
     clogsdir = os.path.join(cpath, 'logs')
     tfefn = next(f for f in os.listdir(clogsdir) if 'tfevents' in f)
     logging.info('tailing %s from config %s', tfefn, config['_id'])
-    utils.tail_remote_file(host, os.path.join(rpath, 'logs', tfefn), os.path.join(cpath, 'logs', tfefn))
+    utils.tail_remote_file(host, os.path.join(rpath, 'logs') + '/*tvevents*', os.path.join(cpath, 'logs') + '/*tvevents*')
 
 
 def tensorboard(experiment, port):

@@ -65,6 +65,13 @@ def find_experiment_id(search_string, raise_if_none=True):
         raise Exception('Experiment {} not found'.format(search_string))
     return e
 
+def delete_all():
+    nd = 0
+    for exp in db.experiments.find({}):
+        nd += 1
+        delete(exp)
+    return nd
+
 
 def delete(experiment):
     orphans = get_file_ids_for_experiment(experiment)
@@ -75,6 +82,13 @@ def delete(experiment):
 def cmdline_delete(args):
     exp = find_experiment(args.search_string)
     delete(exp)
+
+
+def cmdline_delete_all(args):
+    confirm()
+    delete_all()
+    print('deleted {} experiments'.format(nd))
+    clean()
 
 
 def status():
@@ -198,6 +212,12 @@ def cmdline_tb(args):
     tensorboard(exp, port)
 
 
+def confirm(prompt='Really?'):
+    a = input(prompt + "[yN]")
+    if a == 'y' or a == 'Y':
+        return
+    exit(0)
+
 
 def main():
     try:
@@ -207,6 +227,7 @@ def main():
 
         no_args_dict = {
             'clean': ('clean up saved experiments', cmdline_clean),
+            'deleteall': ('delete all experiments', cmdline_delete_all),
         }
 
         for k, v in no_args_dict.items():

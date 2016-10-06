@@ -136,7 +136,7 @@ def tail_remote_file(host, remote_path, local_path, interval=5):
         try:
             system_call(cmd)
             time.sleep(interval)
-        except Exception e:
+        except Exception as e:
             print(e)
             break
 

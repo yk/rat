@@ -89,6 +89,7 @@ class ConditionTermWorker(TermWorker):
                         self.heartbeat()
                         did_perform_work = True
                     else:
+                        self.log.info("not ready to work, requeueing job")
                         queue.enqueue_job(job)
 
                 else:

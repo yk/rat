@@ -86,7 +86,7 @@ def cmdline_delete(args):
 
 def cmdline_delete_all(args):
     confirm()
-    delete_all()
+    nd = delete_all()
     print('deleted {} experiments'.format(nd))
     clean()
 

@@ -7,7 +7,12 @@ import logging
 import tempfile
 import signal
 from rq import Worker
+from rq.logutils import setup_loghandlers
+from rq.version import VERSION
+from rq.worker import WorkerStatus
+from rq.worker import StopRequested
 
+import filelock
 
 class TermWorker(Worker):
 
@@ -40,6 +45,87 @@ class TermWorker(Worker):
                 os.waitpid(self.horse_pid, 0)
             except ChildProcessError:
                 pass
+
+
+
+class ConditionTermWorker(TermWorker):
+    def ready_to_work(self):
+        raise Exception("Not Implemented")
+
+    def work(self, burst=False, logging_level="INFO"):
+        setup_loghandlers(logging_level)
+        self._install_signal_handlers()
+
+        did_perform_work = False
+        self.register_birth()
+        self.log.info("RQ worker {0!r} started, version {1}".format(self.key, VERSION))
+        self.set_state(WorkerStatus.STARTED)
+
+        try:
+            while True:
+                if self.ready_to_work():
+                    try:
+                        self.check_for_suspension(burst)
+
+                        if self.should_run_maintenance_tasks:
+                            self.clean_registries()
+
+                        if self._stop_requested:
+                            self.log.info('Stopping on request')
+                            break
+
+                        timeout = None if burst else max(1, self.default_worker_ttl - 60)
+
+                        result = self.dequeue_job_and_maintain_ttl(timeout)
+                        if result is None:
+                            if burst:
+                                self.log.info("RQ worker {0!r} done, quitting".format(self.key))
+                            break
+                    except StopRequested:
+                        break
+
+                    job, queue = result
+                    if self.ready_to_work():
+                        self.execute_job(job, queue)
+                        self.heartbeat()
+                        did_perform_work = True
+                    else:
+                        queue.enqueue_job(job)
+
+                else:
+                    self.heartbeat()
+                    time.sleep(10)
+
+        finally:
+            if not self.is_horse:
+                self.register_death()
+        return did_perform_work
+
+
+class GpuWorker(ConditionTermWorker):
+    def ready_to_work(self):
+        import pycuda.driver as pd
+        import pycuda.tools as pt
+        gpu = os.environ['CUDA_VISIBLE_DEVICES']
+        if not gpu or gpu == '':
+            return False
+        try:
+            pd.init()
+            ctx = pt.make_default_context()
+            ctx.detach()
+            return True
+        except:
+            return False
+
+
+class FilelockWorker(ConditionTermWorker):
+    lock = filelock.FileLock(os.path.expanduser('~/tmp/lock'))
+    def ready_to_work(self):
+        try:
+            self.lock.acquire(1)
+            return True
+        except filelock.Timeout:
+            return False
 
 
 def run_config(rat_config, experiment, config):

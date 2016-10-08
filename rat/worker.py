@@ -117,17 +117,6 @@ class GpuWorker(ConditionTermWorker):
             return False
 
 
-class FilelockWorker(ConditionTermWorker):
-    import filelock
-    lock = filelock.FileLock(os.path.expanduser('~/tmp/lock'))
-    def ready_to_work(self):
-        try:
-            self.lock.acquire(1)
-            return True
-        except filelock.Timeout:
-            return False
-
-
 def run_config(rat_config, experiment, config):
     host = os.environ.get('RAT_HOST', '')
     db, grid = utils.get_mongo(rat_config)

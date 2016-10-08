@@ -12,7 +12,6 @@ from rq.version import VERSION
 from rq.worker import WorkerStatus
 from rq.worker import StopRequested
 
-import filelock
 
 class TermWorker(Worker):
 
@@ -119,6 +118,7 @@ class GpuWorker(ConditionTermWorker):
 
 
 class FilelockWorker(ConditionTermWorker):
+    import filelock
     lock = filelock.FileLock(os.path.expanduser('~/tmp/lock'))
     def ready_to_work(self):
         try:

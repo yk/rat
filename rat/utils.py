@@ -44,7 +44,7 @@ def sleepecho(s):
 def get_all_files(directory):
     ls = []
     for e in os.listdir(directory):
-        if e.startswith('.') or e == 'ratfile.py':
+        if e.startswith('.') or e.startswith('~') or e.startswith('_'):
             continue
         eabs = os.path.join(directory, e)
         if os.path.isfile(eabs):
@@ -83,12 +83,13 @@ def save_file_tree(grid, base_dir, filenames):
         fids.append(fid)
     return fids
 
-def load_file_tree(grid, base_dir, file_ids):
+def load_file_tree(grid, base_dir, file_ids, exclude_patterns=[]):
     files = []
     for fid in file_ids:
-        print(fid)
         gfile = grid.get(fid if isinstance(fid, ObjectId) else ObjectId(fid))
         fn = gfile.name or str(gfile._id)
+        if any(p in fn for p in exclude_patterns):
+            continue
         local_abs_path = os.path.abspath(os.path.join(base_dir, fn) )
         folder_path, _ = os.path.split(local_abs_path)
         os.makedirs(folder_path, exist_ok=True)
@@ -143,6 +144,11 @@ def tail_remote_file(host, remote_path, local_path, interval=5):
 
 def dict_to_flags(d : dict):
     return " ".join(['--{0}={2}{1}{2}'.format(k, v, '"' if isinstance(v, str) else '') for k, v in d.items() if not k == 'main_file'])
+
+
+def dict_to_list(d: dict):
+    return " ".join(['{0}={2}{1}{2}'.format(k, v, '"' if isinstance(v, str) else '') for k, v in d.items() if not k == 'main_file'])
+
 
 
 def dict_to_with(d : dict):

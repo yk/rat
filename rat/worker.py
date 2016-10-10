@@ -147,7 +147,7 @@ def run_config(rat_config, experiment, config):
         new_fids = utils.save_file_tree(grid, path, new_fns)
 
         db.experiments.update({'_id': experiment['_id'], 'configs._id': config['_id']}, {'$set': {'configs.$.status': Status.done, 'configs.$.resultfiles': new_fids}})
-        db.experiments.update({'_id': experiment['_id'], 'configs.status': {'$not': {'$elemMatch': {'$ne': Status.done}}}}, {'$set': {'status': Status.done}})
+        db.experiments.update({'_id': experiment['_id'], '$not': {'configs.status': {'$elemMatch': {'$ne': Status.done}}}}, {'$set': {'status': Status.done}})
 
 
     

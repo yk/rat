@@ -22,7 +22,7 @@ rat_config = rcfile('rat')
 db, grid = utils.get_mongo(rat_config)
 rqueue = utils.get_redis(rat_config)
 
-logging.root.setLevel(logging.INFO)
+# logging.root.setLevel(logging.INFO)
 
 
 def run_config(experiment, config_id, configspec):
@@ -53,10 +53,19 @@ def run_experiment(configs, name=None):
 
 
 def find_experiment(search_string, raise_if_none=True):
-    e = db.experiments.find_one({'_id': {'$regex': '^{}'.format(search_string)}})
-    if raise_if_none and not e:
-        raise Exception('Experiment {} not found'.format(search_string))
-    return e
+    e = db.experiments.find({'_id': {'$regex': '^{}'.format(search_string)}})
+    s = e.size()
+    if s > 1:
+        raise Exception('Ambiguous search string: {}'.format(search_string))
+    if s < 1:
+        if raise_if_none:
+            raise Exception('Experiment {} not found'.format(search_string))
+        return None
+    return next(e)
+
+
+def find_latest_experiment():
+    return db.experiments.find_one({}, sort=[('start_time', -1)])
 
 
 def find_experiment_id(search_string, raise_if_none=True):
@@ -92,8 +101,8 @@ def cmdline_delete_all(args):
 
 
 def status():
-    exps = db.experiments.find({})
-    return exps
+    exps = db.experiments.find({}, limit=10, sort=[('start_time', -1)])
+    return reversed(list(exps))
 
 
 def cmdline_status(args):
@@ -142,9 +151,9 @@ def export_experiment(experiment, path):
         export_config(c, os.path.join(path, c['_id']))
 
 
-def export_config(config, path):
+def export_config(config, path, exclude_patterns=[]):
     files = get_file_ids_for_config(config)
-    return utils.load_file_tree(grid, path, files)
+    return utils.load_file_tree(grid, path, files, exclude_patterns=exclude_patterns)
 
 
 
@@ -177,7 +186,7 @@ def tensorboard(experiment, port):
         done_configs = []
         not_done_configs = []
         for c in experiment['configs']:
-            export_config(c, os.path.join(path, c['_id']))
+            export_config(c, os.path.join(path, c['_id']), ['model', 'latest'])
             s = Status(c['status'])
             if s == Status.done:
                 done_configs.append(c)
@@ -193,7 +202,7 @@ def tensorboard(experiment, port):
         from tensorflow.tensorboard.tensorboard import main as tbmain
         flags = tf.app.flags.FLAGS
         flags.port = port
-        done_configs_logdirs = [c['_id'] + ':' + os.path.join(path, c['_id'], 'logs') for c in (done_configs + not_done_configs)]
+        done_configs_logdirs = [utils.dict_to_list(c['spec']) + ':' + os.path.join(path, c['_id'], 'logs') for c in (done_configs + not_done_configs)]
         flags.logdir = ",".join(done_configs_logdirs)
         flags.reload_interval = 10
         try:
@@ -208,7 +217,10 @@ def tensorboard(experiment, port):
 
 def cmdline_tb(args):
     port = args.port
-    exp = find_experiment(args.search_string)
+    if args.search_string == 'latest':
+        exp = find_latest_experiment()
+    else:
+        exp = find_experiment(args.search_string)
     tensorboard(exp, port)
 
 
@@ -254,7 +266,7 @@ def main():
         parser_export.set_defaults(func=cmdline_export)
 
         parser_tb = subparsers.add_parser("tb", help="open tensorboard")
-        parser_tb.add_argument('search_string')
+        parser_tb.add_argument('search_string', nargs='?', default='latest')
         parser_tb.add_argument('-p', '--port', default=6006, type=int)
         parser_tb.set_defaults(func=cmdline_tb)
 

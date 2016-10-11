@@ -12,6 +12,7 @@ from rq.version import VERSION
 from rq.worker import WorkerStatus
 from rq.worker import StopRequested
 
+# logging.root.setLevel(logging.INFO)
 
 class TermWorker(Worker):
 
@@ -94,6 +95,7 @@ class ConditionTermWorker(TermWorker):
 
                 else:
                     self.heartbeat()
+                    self.log.info("not ready to work, sleeping")
                     time.sleep(10)
 
         finally:

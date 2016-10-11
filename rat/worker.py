@@ -12,6 +12,8 @@ from rq.version import VERSION
 from rq.worker import WorkerStatus
 from rq.worker import StopRequested
 
+import IPython
+
 # logging.root.setLevel(logging.INFO)
 
 class TermWorker(Worker):
@@ -112,6 +114,7 @@ class GpuWorker(ConditionTermWorker):
     def after_execute(self):
         import pycuda.driver as pd
         cc = pd.Context.get_current()
+        IPython.embed()
         if cc is not None:
             cc.detach()
 

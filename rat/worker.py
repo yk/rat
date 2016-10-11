@@ -142,12 +142,15 @@ def run_config(rat_config, experiment, config):
             # process.kill()
             process.terminate()
 
+        end_time = time.time()
+
         all_files = utils.get_all_files(path)
         new_fns = [fn for fn in all_files if os.path.getmtime(fn) > start_time]
-        new_fids = utils.save_file_tree(grid, path, new_fns)
+        new_fids = utils.save_file_tree(grid, path, new_fns, exclude_patterns=['model', 'latest'])
 
-        db.experiments.update({'_id': experiment['_id'], 'configs._id': config['_id']}, {'$set': {'configs.$.status': Status.done, 'configs.$.resultfiles': new_fids}})
-        db.experiments.update({'_id': experiment['_id'], '$not': {'configs.status': {'$elemMatch': {'$ne': Status.done}}}}, {'$set': {'status': Status.done}})
+
+        db.experiments.update({'_id': experiment['_id'], 'configs._id': config['_id']}, {'$set': {'configs.$.status': Status.done, 'configs.$.resultfiles': new_fids, 'configs.$.end_time': end_time}})
+        db.experiments.update({'_id': experiment['_id'], '$not': {'configs.status': {'$elemMatch': {'$ne': Status.done}}}}, {'$set': {'status': Status.done, 'end_time': end_time}})
 
 
     

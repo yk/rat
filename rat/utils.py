@@ -72,9 +72,11 @@ def close_mongo():
     mongo_client.close()
 
 
-def save_file_tree(grid, base_dir, filenames):
+def save_file_tree(grid, base_dir, filenames, exclude_patterns=[]):
     fids = []
     for fn in filenames:
+        if any(p in fn for p in exclude_patterns):
+            continue
         abs_fn = os.path.join(base_dir, fn)
         logging.info("saving %s from %s", fn, abs_fn)
         with open(abs_fn, 'rb') as f:

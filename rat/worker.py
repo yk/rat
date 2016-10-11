@@ -52,6 +52,9 @@ class ConditionTermWorker(TermWorker):
     def ready_to_work(self):
         raise Exception("Not Implemented")
 
+    def after_execute(self):
+        pass
+
     def work(self, burst=False, logging_level="INFO"):
         setup_loghandlers(logging_level)
         self._install_signal_handlers()
@@ -89,6 +92,7 @@ class ConditionTermWorker(TermWorker):
                         self.execute_job(job, queue)
                         self.heartbeat()
                         did_perform_work = True
+                        self.after_execute()
                     else:
                         self.log.info("not ready to work, requeueing job")
                         queue.enqueue_job(job)
@@ -105,6 +109,10 @@ class ConditionTermWorker(TermWorker):
 
 
 class GpuWorker(ConditionTermWorker):
+    def after_execute(self):
+        import pycuda.tools as pt
+        pt.clear_context_caches()
+
     def ready_to_work(self):
         import pycuda.driver as pd
         import pycuda.tools as pt

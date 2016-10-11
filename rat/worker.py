@@ -150,7 +150,7 @@ def run_config(rat_config, experiment, config):
 
 
         db.experiments.update({'_id': experiment['_id'], 'configs._id': config['_id']}, {'$set': {'configs.$.status': Status.done, 'configs.$.resultfiles': new_fids, 'configs.$.end_time': end_time}})
-        db.experiments.update({'_id': experiment['_id'], '$not': {'configs.status': {'$elemMatch': {'$ne': Status.done}}}}, {'$set': {'status': Status.done, 'end_time': end_time}})
+        db.experiments.update({'_id': experiment['_id'], 'configs': {'$not': {'$elemMatch': {'status': {'$ne': Status.done}}}}}, {'$set': {'status': Status.done, 'end_time': end_time}})
 
 
     

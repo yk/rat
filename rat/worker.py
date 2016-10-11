@@ -110,8 +110,10 @@ class ConditionTermWorker(TermWorker):
 
 class GpuWorker(ConditionTermWorker):
     def after_execute(self):
-        import pycuda.tools as pt
-        pt.clear_context_caches()
+        import pycuda.driver as pd
+        cc = pd.Context.get_current()
+        if cc is not None:
+            cc.detach()
 
     def ready_to_work(self):
         import pycuda.driver as pd

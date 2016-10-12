@@ -62,7 +62,7 @@ def get_redis(config):
 
 def get_mongo(config):
     global mongo_client
-    if mongo_client is None
+    if mongo_client is None:
         mongo_client = MongoClient(host=config.get('mongo_host', 'localhost'), port=int(config.get('mongo_port', '27017')))
     mongo_db = mongo_client[config.get('mongo_db', 'rat')]
     mongo_user = config.get('mongo_user', '')

@@ -68,7 +68,7 @@ def get_mongo(config):
     mongo_user = config.get('mongo_user', '')
     if mongo_user:
         mongo_pwd = config.get('mongo_pwd', '')
-        mongo_db.authenticate(mongo_user, mongo_pwd)
+        mongo_db.authenticate(mongo_user, mongo_pwd, source='admin')
     mongo_grid = GridFS(mongo_db, collection="testfs")
     return mongo_db, mongo_grid
 

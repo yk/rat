@@ -62,8 +62,13 @@ def get_redis(config):
 
 def get_mongo(config):
     global mongo_client
-    mongo_client = mongo_client or MongoClient(host=config.get('mongo_host', 'localhost'), port=int(config.get('mongo_port', '27017')))
+    if mongo_client is None
+        mongo_client = MongoClient(host=config.get('mongo_host', 'localhost'), port=int(config.get('mongo_port', '27017')))
     mongo_db = mongo_client[config.get('mongo_db', 'rat')]
+    mongo_user = config.get('mongo_user', '')
+    if mongo_user:
+        mongo_pwd = config.get('mongo_pwd', '')
+        mongo_db.authenticate(mongo_user, mongo_pwd)
     mongo_grid = GridFS(mongo_db, collection="testfs")
     return mongo_db, mongo_grid
 

@@ -54,7 +54,7 @@ def run_experiment(configs, name=None):
 
 def find_experiment(search_string, raise_if_none=True):
     e = db.experiments.find({'_id': {'$regex': '^{}'.format(search_string)}})
-    s = e.size()
+    s = e.count()
     if s > 1:
         raise Exception('Ambiguous search string: {}'.format(search_string))
     if s < 1:

@@ -145,7 +145,9 @@ def run_config(rat_config, experiment, config):
         start_time = time.time()
         # utils.system_call('python3 {} > stdout.txt 2> stderr.txt'.format(main_file))
         flags = utils.dict_to_flags(config['spec'])
-        process = utils.async_system_call('python3 {} {}'.format(main_file, flags))
+        cmd = 'python3 {} {}'.format(main_file, flags)
+        logging.info(cmd)
+        process = utils.async_system_call(cmd)
         def handler(signum, frame):
             process.terminate()
         signal.signal(signal.SIGTERM, handler)

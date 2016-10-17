@@ -155,6 +155,7 @@ def run_config(rat_config, experiment, config):
             process.wait()
         except:
             # process.kill()
+            print('EXCEEEEPT')
             process.terminate()
 
         end_time = time.time()

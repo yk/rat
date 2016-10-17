@@ -153,9 +153,9 @@ def run_config(rat_config, experiment, config):
         signal.signal(signal.SIGTERM, handler)
         try:
             process.wait()
-        except:
+        except Exception as e:
             # process.kill()
-            print('EXCEEEEPT')
+            print(str(e), str(e.with_traceback()))
             process.terminate()
 
         end_time = time.time()

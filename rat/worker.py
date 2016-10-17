@@ -12,7 +12,7 @@ from rq.version import VERSION
 from rq.worker import WorkerStatus
 from rq.worker import StopRequested
 
-# logging.root.setLevel(logging.INFO)
+logging.root.setLevel(logging.DEBUG)
 
 class TermWorker(Worker):
 

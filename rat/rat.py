@@ -108,9 +108,10 @@ def status():
 def cmdline_status(args):
     def get_table():
         exps = status()
-        table_data = [['Id', 'Name', 'Status', 'Start Time']]
+        table_data = [['Id', 'Name', 'Status', 'Start Time', 'End Time']]
         for e in exps:
-            table_data.append([e['_id'][:6], e['name'], Status(e['status']).name, time.ctime(e['start_time'])])
+            end_time = time.ctime(e['end_time']) if 'end_time' in e else '-'
+            table_data.append([e['_id'][:6], e['name'], Status(e['status']).name, time.ctime(e['start_time']), end_time])
         return AsciiTable(table_data).table
 
     if args.follow:

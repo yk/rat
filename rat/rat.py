@@ -316,7 +316,7 @@ def main():
 
         parser_kill = subparsers.add_parser("kill", help="kill an experiment")
         parser_kill.add_argument('search_string')
-        parser_kill.add_argument('-d', '--delete', default=False, type=bool, help="delete after kill")
+        parser_kill.add_argument('-d', '--delete', action='store_true', help="delete after kill")
         parser_kill.set_defaults(func=cmdline_kill)
 
         parser_export = subparsers.add_parser("export", help="export an experiment")

@@ -126,6 +126,7 @@ def kill(experiment):
     for c in experiment['configs']:
         if c['status'] == Status.running:
             kill_config(experiment, c)
+    db.experiments.update({'_id': experiment['_id']}, {'status': Status.killed})
 
 
 

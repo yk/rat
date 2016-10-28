@@ -17,7 +17,7 @@ class Status(IntEnum):
     enqueued = 1
     running = 2
     done = 3
-    aborted = 90
+    killed = 90
     error = 95
 
 

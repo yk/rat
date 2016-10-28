@@ -17,6 +17,7 @@ from terminaltables import AsciiTable
 from multiprocessing import Process
 from threading import Thread
 from bson import ObjectId
+from rq import Worker, push_connection, pop_connection
 
 rat_config = rcfile('rat')
 db, grid = utils.get_mongo(rat_config)
@@ -82,6 +83,14 @@ def delete_all():
     return nd
 
 
+def kill_all():
+    nd = 0
+    for exp in db.experiments.find({}):
+        nd += 1
+        kill(exp)
+    return nd
+
+
 def delete(experiment):
     orphans = get_file_ids_for_experiment(experiment)
     delete_grid_files(orphans)
@@ -93,26 +102,64 @@ def cmdline_delete(args):
     delete(exp)
 
 
+def kill_config(experiment, config):
+    push_connection(rqueue.connection)
+    for w in Worker.all():
+        try:
+            j = w.get_current_job()
+        except:
+            continue
+        if j is None: continue
+        if j.args[1]['_id'] == experiment['_id'] and j.args[2]['_id'] == config['_id']:
+            cmd = "ssh {} 'kill $(pgrep -P {})'".format(config['host'], w.name.split('.')[-1])
+            utils.system_call(cmd)
+
+    pop_connection()
+
+
+def kill(experiment):
+    for j in rqueue.jobs:
+        exp_args = j.args[1]
+        if exp_args['_id'] == experiment['_id']:
+            j.delete()
+    for c in experiment['configs']:
+        if c['status'] == Status.running:
+            kill_config(experiment, c)
+
+
+
+def cmdline_kill(args):
+    exp = find_experiment(args.search_string)
+    kill(exp)
+
+
 def cmdline_delete_all(args):
     confirm()
     nd = delete_all()
     print('deleted {} experiments'.format(nd))
     clean()
 
+def cmdline_kill_all(args):
+    confirm()
+    nd = kill_all()
+    print('killed {} experiments'.format(nd))
+    clean()
+
 
 def status():
     exps = db.experiments.find({}, limit=10, sort=[('start_time', -1)])
-    return reversed(list(exps))
+    jobs = rqueue.jobs
+    return reversed(list(exps)), jobs
 
 
 def cmdline_status(args):
     def get_table():
-        exps = status()
+        exps, jobs = status()
         table_data = [['Id', 'Name', 'Status', 'Start Time', 'End Time']]
         for e in exps:
             end_time = time.ctime(e['end_time']) if 'end_time' in e else '-'
             table_data.append([e['_id'][:6], e['name'], Status(e['status']).name, time.ctime(e['start_time']), end_time])
-        return AsciiTable(table_data).table
+        return AsciiTable(table_data).table + '\n' + '{} jobs in queue'.format(len(jobs))
 
     if args.follow:
         utils.display_continuous(get_table, 1)
@@ -172,14 +219,14 @@ def cmdline_export(args):
 
 
 def wait_and_tail_logs(experiment, config, path):
-    config = utils.wait_for_running(db, experiment['_id'], config['_id'])
+    # config = utils.wait_for_running(db, experiment['_id'], config['_id'])
     cpath = os.path.join(path, config['_id'])
     host, rpath = config['host'], config['path']
     utils.rsync_remote_folder(host, rpath, cpath)
     clogsdir = os.path.join(cpath, 'logs')
     tfefn = next(f for f in os.listdir(clogsdir) if 'tfevents' in f)
     logging.info('tailing %s from config %s', tfefn, config['_id'])
-    utils.tail_remote_file(host, os.path.join(rpath, 'logs') + '/*tvevents*', os.path.join(cpath, 'logs') + '/*tvevents*')
+    # utils.tail_remote_file(host, os.path.join(rpath, 'logs') + '/*tvevents*', os.path.join(cpath, 'logs') + '/*tvevents*')
 
 
 def tensorboard(experiment, port):
@@ -199,6 +246,8 @@ def tensorboard(experiment, port):
             p = Thread(target=wait_and_tail_logs, args=(experiment, c, path))
             p.start()
             processes.append(p)
+        for p in processes:
+            p.join()
         import tensorflow as tf
         from tensorflow.tensorboard.tensorboard import main as tbmain
         flags = tf.app.flags.FLAGS
@@ -241,6 +290,7 @@ def main():
         no_args_dict = {
             'clean': ('clean up saved experiments', cmdline_clean),
             'deleteall': ('delete all experiments', cmdline_delete_all),
+            'killall': ('kill all experiments', cmdline_kill_all),
         }
 
         for k, v in no_args_dict.items():
@@ -259,6 +309,10 @@ def main():
         parser_delete = subparsers.add_parser("delete", help="delete an experiment")
         parser_delete.add_argument('search_string')
         parser_delete.set_defaults(func=cmdline_delete)
+
+        parser_kill = subparsers.add_parser("kill", help="kill an experiment")
+        parser_kill.add_argument('search_string')
+        parser_kill.set_defaults(func=cmdline_kill)
 
         parser_export = subparsers.add_parser("export", help="export an experiment")
         parser_export.add_argument('search_string')

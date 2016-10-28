@@ -120,7 +120,7 @@ def display_continuous(str_func, interval=5):
 
 
 def rsync_remote_folder(host, remote_path, local_path):
-    cmd = 'rsync -avz "{}:{}/*" {}/'.format(host, remote_path, local_path)
+    cmd = 'rsync -qavz "{}:{}/*" {}/'.format(host, remote_path, local_path)
     system_call(cmd)
 
 
@@ -139,7 +139,7 @@ def wait_for_running(db, experiment_id, config_id, interval=10):
 def tail_remote_file(host, remote_path, local_path, interval=5):
     # cmd = 'unbuffer ssh {} "tail -qf -c+0 {} | base64" | gbase64 --decode -i > "{}"'.format(host, remote_path, local_path)
     # system_call(cmd, False)
-    cmd = 'rsync -a "{}:{}" "{}"'.format(host, remote_path, local_path)
+    cmd = 'rsync -qa "{}:{}" "{}"'.format(host, remote_path, local_path)
     while True:
         try:
             system_call(cmd)

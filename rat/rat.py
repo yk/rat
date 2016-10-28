@@ -126,13 +126,15 @@ def kill(experiment):
     for c in experiment['configs']:
         if c['status'] == Status.running:
             kill_config(experiment, c)
-    db.experiments.update({'_id': experiment['_id']}, {'status': Status.killed})
+    db.experiments.update({'_id': experiment['_id']}, {'$set': {'status': Status.killed}})
 
 
 
 def cmdline_kill(args):
     exp = find_experiment(args.search_string)
     kill(exp)
+    if args.delete:
+        delete(exp)
 
 
 def cmdline_delete_all(args):
@@ -314,6 +316,7 @@ def main():
 
         parser_kill = subparsers.add_parser("kill", help="kill an experiment")
         parser_kill.add_argument('search_string')
+        parser_kill.add_argument('-d', '--delete', default=False, type=bool, help="delete after kill")
         parser_kill.set_defaults(func=cmdline_kill)
 
         parser_export = subparsers.add_parser("export", help="export an experiment")

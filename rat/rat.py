@@ -85,9 +85,10 @@ def delete_all():
 
 def kill_all():
     nd = 0
-    for exp in db.experiments.find({}):
+    for exp in reversed(list(db.experiments.find({}))):
         nd += 1
         kill(exp)
+        time.sleep(1)
     return nd
 
 
@@ -111,7 +112,7 @@ def kill_config(experiment, config):
             continue
         if j is None: continue
         if j.args[1]['_id'] == experiment['_id'] and j.args[2]['_id'] == config['_id']:
-            cmd = "ssh {} 'kill $(pgrep -P {})'".format(config['host'], w.name.split('.')[-1])
+            cmd = "ssh -q {} 'kill $(pgrep -P {})'".format(config['host'], w.name.split('.')[-1])
             utils.system_call(cmd)
 
     pop_connection()

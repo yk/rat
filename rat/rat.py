@@ -83,11 +83,11 @@ def delete_all():
     return nd
 
 
-def kill_all():
+def kill_all(delete_after=False):
     nd = 0
     for exp in reversed(list(db.experiments.find({}))):
         nd += 1
-        kill(exp)
+        kill(exp, delete_after=delete_after)
         time.sleep(1)
     return nd
 
@@ -118,7 +118,7 @@ def kill_config(experiment, config):
     pop_connection()
 
 
-def kill(experiment):
+def kill(experiment, delete_after=False):
     for j in rqueue.jobs:
         exp_args = j.args[1]
         if exp_args['_id'] == experiment['_id']:
@@ -127,14 +127,14 @@ def kill(experiment):
         if c['status'] == Status.running:
             kill_config(experiment, c)
     db.experiments.update({'_id': experiment['_id']}, {'$set': {'status': Status.killed}})
+    if delete_after:
+        delete(experiment)
 
 
 
 def cmdline_kill(args):
     exp = find_experiment(args.search_string)
-    kill(exp)
-    if args.delete:
-        delete(exp)
+    kill(exp, delete_after=args.delete)
 
 
 def cmdline_delete_all(args):
@@ -145,7 +145,7 @@ def cmdline_delete_all(args):
 
 def cmdline_kill_all(args):
     confirm()
-    nd = kill_all()
+    nd = kill_all(delete_after=args.delete)
     print('killed {} experiments'.format(nd))
     clean()
 
@@ -224,6 +224,7 @@ def cmdline_export(args):
 
 def wait_and_tail_logs(experiment, config, path):
     # config = utils.wait_for_running(db, experiment['_id'], config['_id'])
+    if config['status'] < Status.running: return
     cpath = os.path.join(path, config['_id'])
     host, rpath = config['host'], config['path']
     utils.rsync_remote_folder(host, rpath, cpath)
@@ -294,7 +295,6 @@ def main():
         no_args_dict = {
             'clean': ('clean up saved experiments', cmdline_clean),
             'deleteall': ('delete all experiments', cmdline_delete_all),
-            'killall': ('kill all experiments', cmdline_kill_all),
         }
 
         for k, v in no_args_dict.items():
@@ -318,6 +318,10 @@ def main():
         parser_kill.add_argument('search_string')
         parser_kill.add_argument('-d', '--delete', action='store_true', help="delete after kill")
         parser_kill.set_defaults(func=cmdline_kill)
+
+        parser_kill_all = subparsers.add_parser("kill", help="kill all experiments")
+        parser_kill_all.add_argument('-d', '--delete', action='store_true', help="delete after kill")
+        parser_kill_all.set_defaults(func=cmdline_kill_all)
 
         parser_export = subparsers.add_parser("export", help="export an experiment")
         parser_export.add_argument('search_string')

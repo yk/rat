@@ -319,7 +319,7 @@ def main():
         parser_kill.add_argument('-d', '--delete', action='store_true', help="delete after kill")
         parser_kill.set_defaults(func=cmdline_kill)
 
-        parser_kill_all = subparsers.add_parser("kill", help="kill all experiments")
+        parser_kill_all = subparsers.add_parser("killall", help="kill all experiments")
         parser_kill_all.add_argument('-d', '--delete', action='store_true', help="delete after kill")
         parser_kill_all.set_defaults(func=cmdline_kill_all)
 

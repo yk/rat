@@ -65,8 +65,8 @@ def find_experiment(search_string, raise_if_none=True):
     return next(e)
 
 
-def find_latest_running_experiment():
-    return db.experiments.find_one({'status': Status.running}, sort=[('start_time', -1)])
+def find_latest_running_or_done_experiment():
+    return db.experiments.find_one({'$or': [{'status': Status.running}, {'status': Status.done}]}, sort=[('start_time', -1)])
 
 
 def find_experiment_id(search_string, raise_if_none=True):
@@ -273,7 +273,7 @@ def tensorboard(experiment, port):
 def cmdline_tb(args):
     port = args.port
     if args.search_string == 'latest':
-        exp = find_latest_running_experiment()
+        exp = find_latest_running_or_done_experiment()
     else:
         exp = find_experiment(args.search_string)
     tensorboard(exp, port)

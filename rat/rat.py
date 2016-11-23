@@ -205,7 +205,7 @@ def export_experiment(experiment, path):
 
 def export_config(config, path, exclude_patterns=[]):
     files = get_file_ids_for_config(config)
-    return utils.load_file_tree(grid, path, files, exclude_patterns=exclude_patterns)
+    return utils.load_file_tree(grid, path, files, exclude_patterns=exclude_patterns, raise_on_error=False)
 
 
 

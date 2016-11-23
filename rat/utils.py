@@ -90,10 +90,16 @@ def save_file_tree(grid, base_dir, filenames, exclude_patterns=[]):
         fids.append(fid)
     return fids
 
-def load_file_tree(grid, base_dir, file_ids, exclude_patterns=[]):
+def load_file_tree(grid, base_dir, file_ids, exclude_patterns=[], raise_on_error=True):
     files = []
     for fid in file_ids:
-        gfile = grid.get(fid if isinstance(fid, ObjectId) else ObjectId(fid))
+        try:
+            gfile = grid.get(fid if isinstance(fid, ObjectId) else ObjectId(fid))
+        except:
+            if raise_on_error:
+                raise
+            logging.warning("could not restore file %s", str(fid))
+            continue
         fn = gfile.name or str(gfile._id)
         if any(p in fn for p in exclude_patterns):
             continue

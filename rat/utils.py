@@ -9,8 +9,23 @@ from enum import IntEnum
 import logging
 import curses
 import subprocess
+import contextlib
 
 mongo_client = None
+
+
+@contextlib.contextmanager
+def working_directory(path):
+    """A context manager which changes the working directory to the given
+    path, and then changes it back to its previous value on exit.
+
+    """
+    prev_cwd = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(prev_cwd)
 
 
 class Status(IntEnum):
@@ -126,7 +141,7 @@ def display_continuous(str_func, interval=5):
 
 
 def rsync_remote_folder(host, remote_path, local_path):
-    cmd = 'rsync --progress -h -e "ssh -q" -qavz "{}:{}/*" {}/'.format(host, remote_path, local_path)
+    cmd = 'rsync --progress -h -e "ssh -q" -qavz "{}:{}/*" "{}/"'.format(host, remote_path, local_path)
     system_call(cmd)
 
 

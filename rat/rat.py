@@ -222,10 +222,10 @@ def cmdline_export(args):
         export_experiment(exp, path)
 
 
-def wait_and_tail_logs(experiment, config, path):
+def wait_and_tail_logs(experiment, config, cpath):
     # config = utils.wait_for_running(db, experiment['_id'], config['_id'])
     if config['status'] < Status.running: return
-    cpath = os.path.join(path, config['_id'])
+    # cpath = os.path.join(path, config['_id'])
     host, rpath = config['host'], config['path']
     utils.rsync_remote_folder(host, rpath, cpath)
     clogsdir = os.path.join(cpath, 'logs')
@@ -239,35 +239,54 @@ def tensorboard(experiment, port):
         done_configs = []
         not_done_configs = []
         for c in experiment['configs']:
-            export_config(c, os.path.join(path, c['_id']), ['model', 'latest'])
+            # cpath = os.path.join(path, c['_id'])
+            cpath = os.path.join(path, utils.dict_to_list(c['spec']))
+            export_config(c, cpath, ['model', 'latest'])
             s = Status(c['status'])
             if s == Status.done:
                 done_configs.append(c)
             elif s < Status.done:
-                not_done_configs.append(c)
+                not_done_configs.append((c, cpath))
         processes = []
-        for c in not_done_configs:
+        for c, cpath in not_done_configs:
             # p = Process(target=wait_and_tail_logs, args=(experiment, c, path))
-            p = Thread(target=wait_and_tail_logs, args=(experiment, c, path))
+            p = Thread(target=wait_and_tail_logs, args=(experiment, c, cpath))
             p.start()
             processes.append(p)
         for p in processes:
             p.join()
-        import tensorflow as tf
-        from tensorflow.tensorboard.tensorboard import main as tbmain
-        flags = tf.app.flags.FLAGS
-        flags.port = port
-        done_configs_logdirs = [utils.dict_to_list(c['spec']) + ':' + os.path.join(path, c['_id'], 'logs') for c in (done_configs + not_done_configs)]
-        flags.logdir = ",".join(done_configs_logdirs)
-        flags.reload_interval = 10
-        try:
-            tbmain()
-        finally:
-            pass
-            # for p in processes:
-                # logging.info('terminating %s', str(p))
-                # p.terminate()
 
+        with utils.working_directory(path):
+            import tensorflow as tf
+            from tensorflow.tensorboard.tensorboard import main as tbmain
+            from tensorflow.tensorboard.plugins.projector.plugin import ProjectorPlugin
+            flags = tf.app.flags.FLAGS
+            flags.port = port
+            # done_configs_logdirs = [utils.dict_to_list(c['spec']) + ':' + os.path.join(c['_id'], 'logs') for c in (done_configs + not_done_configs)]
+            # flags.logdir = ",".join(done_configs_logdirs)
+            flags.logdir = '.'
+            flags.reload_interval = 10
+            try:
+                print('running tensorboard in {}'.format(path))
+
+                def _new_get_metadata(self, tensor_name, config):
+                    try:
+                        cppath = config.model_checkpoint_path.rsplit('/', 1)[0]
+                        for e in config.embeddings:
+                            if e.tensor_name == tensor_name:
+                                mfn = e.metadata_path.rsplit('/', 1)[-1]
+                                return os.path.join(cppath, mfn)
+                    except:
+                        pass
+                    return None
+
+                ProjectorPlugin._get_metadata_file_for_tensor = _new_get_metadata
+                tbmain()
+            finally:
+                pass
+                # for p in processes:
+                    # logging.info('terminating %s', str(p))
+                    # p.terminate()
 
 
 def cmdline_tb(args):

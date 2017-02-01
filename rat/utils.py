@@ -50,11 +50,13 @@ def async_system_call(cmd):
 
 def echo(s):
     print(s)
-    return s+'a'
+    return s + 'a'
+
 
 def sleepecho(s):
     time.sleep(3)
     echo(s)
+
 
 def get_all_files(directory):
     ls = []
@@ -105,6 +107,7 @@ def save_file_tree(grid, base_dir, filenames, exclude_patterns=[]):
         fids.append(fid)
     return fids
 
+
 def load_file_tree(grid, base_dir, file_ids, exclude_patterns=[], raise_on_error=True):
     files = []
     for fid in file_ids:
@@ -118,7 +121,7 @@ def load_file_tree(grid, base_dir, file_ids, exclude_patterns=[], raise_on_error
         fn = gfile.name or str(gfile._id)
         if any(p in fn for p in exclude_patterns):
             continue
-        local_abs_path = os.path.abspath(os.path.join(base_dir, fn) )
+        local_abs_path = os.path.abspath(os.path.join(base_dir, fn))
         folder_path, _ = os.path.split(local_abs_path)
         os.makedirs(folder_path, exist_ok=True)
         logging.info("restoring %s as %s", fn, local_abs_path)
@@ -126,6 +129,7 @@ def load_file_tree(grid, base_dir, file_ids, exclude_patterns=[], raise_on_error
             f.write(gfile.read())
         files.append((fid, fn, local_abs_path))
     return files
+
 
 def display_continuous(str_func, interval=5):
     scr = curses.initscr()

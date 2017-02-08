@@ -155,17 +155,36 @@ def cmdline_kill_all(args):
 
 def status():
     exps = db.experiments.find({}, limit=10, sort=[('start_time', -1)])
+    exps = list(exps)
+    for e in exps:
+        cstats = {
+                    Status.enqueued: 0,
+                    Status.running: 0,
+                    Status.done: 0,
+                }
+        for c in e['configs']:
+            s = Status(c['status'])
+            if s in cstats:
+                cstats[s] += 1
+
+        e['cstats'] = cstats
+
     jobs = rqueue.jobs
     return reversed(list(exps)), jobs
+
+
+TIMEFORMAT = '%d.%m. %H:%M:%S'
 
 
 def cmdline_status(args):
     def get_table():
         exps, jobs = status()
-        table_data = [['Id', 'Name', 'Status', 'Start Time', 'End Time']]
+        table_data = [['Id', 'Name', 'Status', 'Q', 'R', 'D', 'Start Time', 'End Time']]
         for e in exps:
-            end_time = time.ctime(e['end_time']) if 'end_time' in e else '-'
-            table_data.append([e['_id'][:6], e['name'], Status(e['status']).name, time.ctime(e['start_time']), end_time])
+            cstats = e['cstats']
+            q, r, d = cstats[Status.enqueued], cstats[Status.running], cstats[Status.done]
+            end_time = time.strftime(TIMEFORMAT, time.localtime(e['end_time'])) if 'end_time' in e else '-'
+            table_data.append([e['_id'][:6], e['name'], Status(e['status']).name, q, r, d, time.strftime(TIMEFORMAT, time.localtime(e['start_time'])), end_time])
         return AsciiTable(table_data).table + '\n' + '{} jobs in queue'.format(len(jobs))
 
     if args.follow:

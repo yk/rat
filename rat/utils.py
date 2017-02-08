@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+
+
 import time
 import os
 from redis import Redis
@@ -34,6 +37,17 @@ class Status(IntEnum):
     done = 3
     killed = 90
     error = 95
+
+    def short(self):
+        d = {
+                Status.enqueued: 'Q',
+                Status.running: 'R',
+                Status.done: 'D',
+                Status.killed: 'K',
+                Status.error: 'E',
+            }
+        l = d[self]
+        return l
 
 
 def system_call(cmd, raise_on_error=True):
@@ -182,7 +196,10 @@ def dict_to_list(d: dict):
     return " ".join(['{0}={2}{1}{2}'.format(k, v, '' if isinstance(v, str) else '') for k, v in d.items() if not k == 'main_file'])
 
 
-
 def dict_to_with(d : dict):
     return " ".join(['with {}="{}"'.format(k, v) for k, v in d.items()])
 
+
+if __name__ == '__main__':
+    s = Status.running
+    print(s.short())

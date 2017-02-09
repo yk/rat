@@ -147,7 +147,7 @@ def run_config(rat_config, experiment, config):
         flags = utils.dict_to_flags(config['spec'])
         cmd = 'python3 {} {}'.format(main_file, flags)
         logging.info(cmd)
-        with open('cmd.log', 'w') as f:
+        with open(os.path.join(path, 'cmd.log'), 'w') as f:
             f.write(cmd)
         process = utils.async_system_call(cmd)
 

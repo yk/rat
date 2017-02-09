@@ -263,7 +263,8 @@ def tensorboard(experiment, port):
         for c in experiment['configs']:
             # cpath = os.path.join(path, c['_id'])
             cpath = os.path.join(path, utils.dict_to_list(c['spec']))
-            export_config(c, cpath, ['model', 'latest'])
+            # export_config(c, cpath, ['model', 'latest'])
+            export_config(c, cpath, [])
             s = Status(c['status'])
             if s == Status.done:
                 done_configs.append(c)

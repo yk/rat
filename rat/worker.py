@@ -147,8 +147,11 @@ def run_config(rat_config, experiment, config):
         flags = utils.dict_to_flags(config['spec'])
         cmd = 'python3 {} {}'.format(main_file, flags)
         logging.info(cmd)
-        with open(os.path.join(path, 'cmd.log'), 'w') as f:
+        cmd_log_path = os.path.join(path, 'cmd.log')
+        with open(cmd_log_path, 'w') as f:
             f.write(cmd)
+        with open(cmd_log_path, 'a'):
+            os.utime(cmd_log_path, None)
         process = utils.async_system_call(cmd)
 
         def handler(signum, frame):
@@ -165,8 +168,6 @@ def run_config(rat_config, experiment, config):
 
         all_files = utils.get_all_files(path)
         new_fns = [fn for fn in all_files if os.path.getmtime(fn) >= start_time]
-        print([os.path.getmtime(fn) for fn in all_files])
-        print(start_time)
         # new_fids = utils.save_file_tree(grid, path, new_fns, exclude_patterns=['latest'])
         new_fids = utils.save_file_tree(grid, path, new_fns, exclude_patterns=[])
 

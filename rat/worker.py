@@ -164,7 +164,7 @@ def run_config(rat_config, experiment, config):
         end_time = time.time()
 
         all_files = utils.get_all_files(path)
-        new_fns = [fn for fn in all_files if os.path.getmtime(fn) > start_time]
+        new_fns = [fn for fn in all_files if os.path.getmtime(fn) >= start_time]
         # new_fids = utils.save_file_tree(grid, path, new_fns, exclude_patterns=['latest'])
         new_fids = utils.save_file_tree(grid, path, new_fns, exclude_patterns=[])
 

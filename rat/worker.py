@@ -147,9 +147,13 @@ def run_config(rat_config, experiment, config):
         flags = utils.dict_to_flags(config['spec'])
         cmd = 'python3 {} {}'.format(main_file, flags)
         logging.info(cmd)
+        with open('cmd.log', 'w') as f:
+            f.write(cmd)
         process = utils.async_system_call(cmd)
+
         def handler(signum, frame):
             process.terminate()
+
         signal.signal(signal.SIGTERM, handler)
         try:
             process.wait()
@@ -161,11 +165,8 @@ def run_config(rat_config, experiment, config):
 
         all_files = utils.get_all_files(path)
         new_fns = [fn for fn in all_files if os.path.getmtime(fn) > start_time]
-        new_fids = utils.save_file_tree(grid, path, new_fns, exclude_patterns=['latest'])
-
+        # new_fids = utils.save_file_tree(grid, path, new_fns, exclude_patterns=['latest'])
+        new_fids = utils.save_file_tree(grid, path, new_fns, exclude_patterns=[])
 
         db.experiments.update({'_id': experiment['_id'], 'configs._id': config['_id']}, {'$set': {'configs.$.status': Status.done, 'configs.$.resultfiles': new_fids, 'configs.$.end_time': end_time}})
         db.experiments.update({'_id': experiment['_id'], 'configs': {'$not': {'$elemMatch': {'status': {'$ne': Status.done}}}}}, {'$set': {'status': Status.done, 'end_time': end_time}})
-
-
-    

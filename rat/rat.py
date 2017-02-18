@@ -136,8 +136,8 @@ def kill(experiment, delete_after=False):
 
 
 def cmdline_kill(args):
-    for ss in args.search_string:
-        exp = find_experiment(ss)
+    exps = [find_experiment(ss) for ss in args.search_string]
+    for exp in exps:
         kill(exp, delete_after=args.delete)
 
 

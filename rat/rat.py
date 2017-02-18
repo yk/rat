@@ -136,8 +136,9 @@ def kill(experiment, delete_after=False):
 
 
 def cmdline_kill(args):
-    exp = find_experiment(args.search_string)
-    kill(exp, delete_after=args.delete)
+    for ss in args.search_string:
+        exp = find_experiment(ss)
+        kill(exp, delete_after=args.delete)
 
 
 def cmdline_delete_all(args):
@@ -357,7 +358,7 @@ def main():
         parser_delete.set_defaults(func=cmdline_delete)
 
         parser_kill = subparsers.add_parser("kill", help="kill an experiment")
-        parser_kill.add_argument('search_string')
+        parser_kill.add_argument('search_string', nargs='+')
         parser_kill.add_argument('-d', '--delete', action='store_true', help="delete after kill")
         parser_kill.set_defaults(func=cmdline_kill)
 

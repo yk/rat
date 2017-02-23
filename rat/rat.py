@@ -221,9 +221,12 @@ def cmdline_clean(args):
     print('{} orphans deleted'.format(num_del))
 
 
-def export_experiment(experiment, path):
+def export_experiment(experiment, path, message=None):
     for c in experiment['configs']:
         export_config(c, os.path.join(path, c['_id']))
+    if message is not None and len(message) > 0:
+        with open(os.path.join(path, 'msg.txt'), 'w') as f:
+            f.write(message)
 
 
 def export_config(config, path, exclude_patterns=[]):
@@ -236,13 +239,13 @@ def cmdline_export(args):
     exp = find_experiment(args.search_string)
     if args.temp:
         with tempfile.TemporaryDirectory() as path:
-            export_experiment(exp, path)
+            export_experiment(exp, path, args.message)
             utils.system_call('open ' + path)
             print('>', end=' ')
             sys.stdin.read(1)
     else:
         path = args.path
-        export_experiment(exp, path)
+        export_experiment(exp, path, args.message)
 
 
 def wait_and_tail_logs(experiment, config, cpath):
@@ -369,6 +372,7 @@ def main():
         parser_export = subparsers.add_parser("export", help="export an experiment")
         parser_export.add_argument('search_string')
         parser_export.add_argument('-p', '--path', help="the directory to export to", default='.')
+        parser_export.add_argument('-m', '--message', help="message to write into the folder", default=None)
         parser_export.add_argument('-t', '--temp', action='store_true', help='export to a temporary folder')
         parser_export.set_defaults(func=cmdline_export)
 

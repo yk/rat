@@ -18,6 +18,8 @@ from multiprocessing import Process
 from threading import Thread
 from bson import ObjectId
 from rq import Worker, push_connection, pop_connection
+import hashlib
+from collections import Counter
 
 rat_config = rcfile('rat')
 db, grid = utils.get_mongo(rat_config)
@@ -264,7 +266,15 @@ def tensorboard(experiment, port):
     with tempfile.TemporaryDirectory() as path:
         done_configs = []
         not_done_configs = []
+        spec_items = sorted(itertools.chain.from_iterable([c['spec'].items() for c in experiment['configs']]), key=lambda p:p[0])
+        ctr = [(k, len(set(g))) for k, g in itertools.groupby(spec_items, lambda p:p[0])]
+        common_attrs = [k for k, c in ctr if c == 1]
+        print('Common Attributes:')
+        print('\n'.join([k + ": " + str(experiment['configs'][0]['spec'][k]) for k in common_attrs]))
+
         for c in experiment['configs']:
+            for cc in common_attrs:
+                del c['spec'][cc]
             # cpath = os.path.join(path, c['_id'])
             cpath = os.path.join(path, utils.dict_to_list(c['spec']))
             # export_config(c, cpath, ['model', 'latest'])

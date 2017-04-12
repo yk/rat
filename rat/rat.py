@@ -269,12 +269,22 @@ def tensorboard(experiment, port):
         spec_items = sorted(itertools.chain.from_iterable([c['spec'].items() for c in experiment['configs']]), key=lambda p:p[0])
         ctr = [(k, len(set(g))) for k, g in itertools.groupby(spec_items, lambda p:p[0])]
         common_attrs = [k for k, c in ctr if c == 1]
+        common_values = []
+        for k in common_attrs:
+            v = None
+            for c in experiment['configs']:
+                if k in c['spec']:
+                    v = c['spec'][k]
+                    break
+            common_values.append(v)
+
         print('Common Attributes:')
-        print('\n'.join([k + ": " + str(experiment['configs'][0]['spec'][k]) for k in common_attrs]))
+        print('\n'.join([k + ": " + str(v) for k, v in zip(common_attrs, common_values)]))
 
         for c in experiment['configs']:
             for cc in common_attrs:
-                del c['spec'][cc]
+                if cc in c['spec']:
+                    del c['spec'][cc]
             # cpath = os.path.join(path, c['_id'])
             cpath = os.path.join(path, utils.dict_to_list(c['spec']))
             # export_config(c, cpath, ['model', 'latest'])

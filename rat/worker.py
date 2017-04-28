@@ -101,7 +101,7 @@ class ConditionTermWorker(TermWorker):
 
                 else:
                     self.heartbeat()
-                    self.log.debug("not ready to work, sleeping")
+                    self.log.info("not ready to work, sleeping")
                     time.sleep(10)
 
         finally:

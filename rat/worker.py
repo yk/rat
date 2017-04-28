@@ -11,8 +11,9 @@ from rq.logutils import setup_loghandlers
 from rq.version import VERSION
 from rq.worker import WorkerStatus
 from rq.worker import StopRequested
+import sh
 
-logging.root.setLevel(logging.DEBUG)
+# logging.root.setLevel(logging.DEBUG)
 
 class TermWorker(Worker):
 
@@ -49,6 +50,7 @@ class TermWorker(Worker):
 
 
 class ConditionTermWorker(TermWorker):
+    SLEEP_TIME = 3
     def ready_to_work(self):
         raise Exception("Not Implemented")
 
@@ -66,6 +68,7 @@ class ConditionTermWorker(TermWorker):
 
         try:
             while True:
+                self.heartbeat()
                 if self.ready_to_work():
                     try:
                         self.check_for_suspension(burst)
@@ -97,12 +100,12 @@ class ConditionTermWorker(TermWorker):
                         self.heartbeat()
                         self.log.info("not ready to work, requeueing job")
                         queue.enqueue_job(job)
-                        time.sleep(10)
+                        time.sleep(ConditionTermWorker.SLEEP_TIME)
 
                 else:
                     self.heartbeat()
                     self.log.info("not ready to work, sleeping")
-                    time.sleep(10)
+                    time.sleep(ConditionTermWorker.SLEEP_TIME)
 
         finally:
             if not self.is_horse:
@@ -110,7 +113,15 @@ class ConditionTermWorker(TermWorker):
         return did_perform_work
 
 
+nvsmi = sh.Command('nvidia-smi')
+
+
 class GpuWorker(ConditionTermWorker):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        import pycuda.driver as pd
+        pd.init()
+
     def after_execute(self):
         import pycuda.driver as pd
         cc = pd.Context.get_current()
@@ -120,17 +131,36 @@ class GpuWorker(ConditionTermWorker):
 
     def ready_to_work(self):
         import pycuda.driver as pd
-        import pycuda.tools as pt
         gpu = os.environ['CUDA_VISIBLE_DEVICES']
         if not gpu or gpu == '':
             return False
         try:
-            pd.init()
-            ctx = pt.make_default_context()
-            ctx.detach()
+            ctext = nvsmi()
+            _, pblock, ublock = ctext.split('|==')
+            ublock = ublock.split('+--')[0].split('\n')[1:-1]
+            pids = [u.split()[1:3] for u in ublock if not ('No running' in u)]
+            gids, pids = zip(*pids) if len(pids) > 0 else ([], [])
+            for gid in gids:
+                if gid == gpu:
+                    return False
             return True
         except:
             return False
+        # try:
+            # self.log.info('1')
+            # self.log.info('2')
+            # # ctx = pt.make_default_context()
+            # ctx = pd.Device(0).make_context(pd.ctx_flags.BLOCKING_SYNC)
+            # self.log.info('3')
+            # ctx.detach()
+            # self.log.info('4')
+            # return True
+        # except:
+            # c = pd.Context.get_current()
+            # if c is not None:
+                # c.detach()
+                # time.sleep(1)
+            # return False
 
 
 def run_config(rat_config, experiment, config):

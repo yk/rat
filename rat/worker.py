@@ -113,28 +113,24 @@ class ConditionTermWorker(TermWorker):
         return did_perform_work
 
 
-nvsmi = sh.Command('nvidia-smi')
 
 
 class GpuWorker(ConditionTermWorker):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        import pycuda.driver as pd
-        pd.init()
-
     def after_execute(self):
         import pycuda.driver as pd
+        pd.init()
         cc = pd.Context.get_current()
         if cc is not None:
             cc.detach()
         time.sleep(1)
 
     def ready_to_work(self):
-        import pycuda.driver as pd
+        # import pycuda.driver as pd
         gpu = os.environ['CUDA_VISIBLE_DEVICES']
         if not gpu or gpu == '':
             return False
         try:
+            nvsmi = sh.Command('nvidia-smi')
             ctext = nvsmi()
             _, pblock, ublock = ctext.split('|==')
             ublock = ublock.split('+--')[0].split('\n')[1:-1]

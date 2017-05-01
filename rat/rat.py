@@ -31,7 +31,10 @@ rqueue = utils.get_redis(rat_config)
 def run_config(experiment, config_id, configspec):
     cwd = os.getcwd()
     ls = utils.get_all_files(cwd)
-    fids = utils.save_file_tree(grid, cwd, ls)
+    exclude_patterns = configspec.get('exclude_patterns', [])
+    include_patterns = configspec.get('include_patterns', [])
+
+    fids = utils.save_file_tree(grid, cwd, ls, exclude_patterns=exclude_patterns, include_patterns=include_patterns)
     config = dict(spec=configspec)
     config['_id'] = config_id
     config['files'] = fids

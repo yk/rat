@@ -50,6 +50,16 @@ class Status(IntEnum):
         return l
 
 
+def exclude_include_patterns(configspec):
+    epat, ipat = [], []
+    if 'exclude' in configspec:
+        epat = configspec['exclude'].split(',')
+    if 'include' in configspec:
+        ipat = configspec['include'].split(',')
+    epat.append('ext/')
+    return epat, ipat
+
+
 def system_call(cmd, raise_on_error=True):
     status = os.system(cmd)
     if status != 0 and raise_on_error:
@@ -123,7 +133,7 @@ def save_file_tree(grid, base_dir, filenames, exclude_patterns=[], include_patte
     return fids
 
 
-def load_file_tree(grid, base_dir, file_ids, exclude_patterns=[], raise_on_error=True):
+def load_file_tree(grid, base_dir, file_ids, exclude_patterns=[], include_patterns=[], raise_on_error=True):
     files = []
     for fid in file_ids:
         try:
@@ -159,8 +169,8 @@ def display_continuous(str_func, interval=5):
     curses.endwin()
 
 
-def rsync_remote_folder(host, remote_path, local_path):
-    cmd = 'rsync --progress -h -e "ssh -q" -qavz "{}:{}/*" "{}/"'.format(host, remote_path, local_path)
+def rsync_remote_folder(host, remote_path, local_path, excludes=[]):
+    cmd = 'rsync --progress -h -e "ssh -q" -qavz {} "{}:{}/*" "{}/"'.format(" ".join(['--exclude "*/{}"'.format(e) for e in excludes]), host, remote_path, local_path)
     system_call(cmd)
 
 

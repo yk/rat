@@ -31,11 +31,7 @@ rqueue = utils.get_redis(rat_config)
 def run_config(experiment, config_id, configspec):
     cwd = os.getcwd()
     ls = utils.get_all_files(cwd)
-    epat, ipat = [], []
-    if 'exclude' in configspec:
-        epat = configspec['exclude'].split(',')
-    if 'include' in configspec:
-        ipat = configspec['include'].split(',')
+    epat, ipat = utils.exclude_include_patterns(configspec)
 
     fids = utils.save_file_tree(grid, cwd, ls, exclude_patterns=epat, include_patterns=ipat)
     config = dict(spec=configspec)
@@ -237,10 +233,9 @@ def export_experiment(experiment, path, message=None):
             f.write(message)
 
 
-def export_config(config, path, exclude_patterns=[]):
+def export_config(config, path, exclude_patterns=[], include_patterns=[]):
     files = get_file_ids_for_config(config)
-    return utils.load_file_tree(grid, path, files, exclude_patterns=exclude_patterns, raise_on_error=False)
-
+    return utils.load_file_tree(grid, path, files, exclude_patterns=exclude_patterns, include_patterns=include_patterns, raise_on_error=False)
 
 
 def cmdline_export(args):
@@ -261,7 +256,7 @@ def wait_and_tail_logs(experiment, config, cpath):
     if config['status'] < Status.running: return
     # cpath = os.path.join(path, config['_id'])
     host, rpath = config['host'], config['path']
-    utils.rsync_remote_folder(host, rpath, cpath)
+    utils.rsync_remote_folder(host, rpath, cpath, excludes=['ext', 'cls'])
     clogsdir = os.path.join(cpath, 'logs')
     tfefn = next(f for f in os.listdir(clogsdir) if 'tfevents' in f)
     logging.info('tailing %s from config %s', tfefn, config['_id'])
@@ -294,7 +289,8 @@ def tensorboard(experiment, port):
             # cpath = os.path.join(path, c['_id'])
             cpath = os.path.join(path, utils.dict_to_list(c['spec']))
             # export_config(c, cpath, ['model', 'latest'])
-            export_config(c, cpath, [])
+            epat, _ = utils.exclude_include_patterns(c['spec'])
+            export_config(c, cpath, exclude_patterns=epat)
             s = Status(c['status'])
             if s == Status.done:
                 done_configs.append(c)

@@ -371,7 +371,7 @@ def main():
 
         parser_status = subparsers.add_parser("status", help='display status of running experiments')
         parser_status.add_argument('-f', '--follow', action='store_true', help='continuously output status')
-        parser_status.add_argument('-l', '--limit', default=10, type=int help='how many experiments to show')
+        parser_status.add_argument('-l', '--limit', default=10, type=int, help='how many experiments to show')
         parser_status.set_defaults(func=cmdline_status)
 
         # parser_run = subparsers.add_parser("run", help="run an experiment")

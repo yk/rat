@@ -158,8 +158,8 @@ def cmdline_kill_all(args):
     clean()
 
 
-def status():
-    exps = db.experiments.find({}, limit=10, sort=[('start_time', -1)])
+def status(limit=10):
+    exps = db.experiments.find({}, limit=limit, sort=[('start_time', -1)])
     exps = list(exps)
     for e in exps:
         cstats = {
@@ -183,7 +183,7 @@ TIMEFORMAT = '%d.%m. %H:%M:%S'
 
 def cmdline_status(args):
     def get_table():
-        exps, jobs = status()
+        exps, jobs = status(args.limit)
         table_data = [['Id', 'Name', 'Status', 'Q', 'R', 'D', 'Start Time', 'End Time']]
         for e in exps:
             cstats = e['cstats']
@@ -371,6 +371,7 @@ def main():
 
         parser_status = subparsers.add_parser("status", help='display status of running experiments')
         parser_status.add_argument('-f', '--follow', action='store_true', help='continuously output status')
+        parser_status.add_argument('-l', '--limit', default=10, type=int help='how many experiments to show')
         parser_status.set_defaults(func=cmdline_status)
 
         # parser_run = subparsers.add_parser("run", help="run an experiment")

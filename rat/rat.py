@@ -256,7 +256,7 @@ def wait_and_tail_logs(experiment, config, cpath):
     if config['status'] < Status.running: return
     # cpath = os.path.join(path, config['_id'])
     host, rpath = config['host'], config['path']
-    utils.rsync_remote_folder(host, rpath, cpath, excludes=['ext', 'cls'])
+    utils.rsync_remote_folder(host, rpath, cpath, excludes=['ext', 'cls', '*.ckpt*'])
     clogsdir = os.path.join(cpath, 'logs')
     tfefn = next(f for f in os.listdir(clogsdir) if 'tfevents' in f)
     logging.info('tailing %s from config %s', tfefn, config['_id'])
@@ -290,6 +290,7 @@ def tensorboard(experiment, port):
             cpath = os.path.join(path, utils.dict_to_list(c['spec']))
             # export_config(c, cpath, ['model', 'latest'])
             epat, _ = utils.exclude_include_patterns(c['spec'])
+            epat.append('.ckpt')
             export_config(c, cpath, exclude_patterns=epat)
             s = Status(c['status'])
             if s == Status.done:

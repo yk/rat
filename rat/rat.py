@@ -20,6 +20,7 @@ from bson import ObjectId
 from rq import Worker, push_connection, pop_connection
 import hashlib
 from collections import Counter
+from tqdm import tqdm
 
 rat_config = rcfile('rat')
 db, grid = utils.get_mongo(rat_config)
@@ -225,8 +226,11 @@ def cmdline_clean(args):
     print('{} orphans deleted'.format(num_del))
 
 
-def export_experiment(experiment, path, message=None):
-    for c in experiment['configs']:
+def export_experiment(experiment, path, configs=None, message=None):
+    cfgs = experiment['configs']
+    if configs:
+        cfgs = [c for c in cfgs if c['_id'] in configs]
+    for c in tqdm(cfgs):
         export_config(c, os.path.join(path, c['_id']))
     if message is not None and len(message) > 0:
         with open(os.path.join(path, 'msg.txt'), 'w') as f:
@@ -240,15 +244,18 @@ def export_config(config, path, exclude_patterns=[], include_patterns=[]):
 
 def cmdline_export(args):
     exp = find_experiment(args.search_string)
+    configs = None
+    if args.configs:
+        configs = args.configs.split(',')
     if args.temp:
         with tempfile.TemporaryDirectory() as path:
-            export_experiment(exp, path, args.message)
+            export_experiment(exp, path, configs=configs, message=args.message)
             utils.system_call('open ' + path)
             print('>', end=' ')
             sys.stdin.read(1)
     else:
         path = args.path
-        export_experiment(exp, path, args.message)
+        export_experiment(exp, path, configs=configs, message=args.message)
 
 
 def wait_and_tail_logs(experiment, config, cpath):
@@ -397,6 +404,7 @@ def main():
         parser_export.add_argument('search_string')
         parser_export.add_argument('-p', '--path', help="the directory to export to", default='.')
         parser_export.add_argument('-m', '--message', help="message to write into the folder", default=None)
+        parser_export.add_argument('-c', '--configs', help="comma separated list of configs to export", default=None)
         parser_export.add_argument('-t', '--temp', action='store_true', help='export to a temporary folder')
         parser_export.set_defaults(func=cmdline_export)
 

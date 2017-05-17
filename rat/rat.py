@@ -294,7 +294,7 @@ def tensorboard(experiment, port):
                 if cc in c['spec']:
                     del c['spec'][cc]
             # cpath = os.path.join(path, c['_id'])
-            cpath = os.path.join(path, utils.dict_to_list(c['spec']))
+            cpath = os.path.join(path, utils.dict_to_list(c['spec']), c['_id'])
             # export_config(c, cpath, ['model', 'latest'])
             epat, _ = utils.exclude_include_patterns(c['spec'])
             epat.append('.ckpt')

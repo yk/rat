@@ -56,7 +56,7 @@ def exclude_include_patterns(configspec):
         epat = configspec['exclude'].split(',')
     if 'include' in configspec:
         ipat = configspec['include'].split(',')
-    epat.append('ext/')
+    # epat.append('ext/')
     return epat, ipat
 
 
@@ -170,7 +170,7 @@ def display_continuous(str_func, interval=5):
 
 
 def rsync_remote_folder(host, remote_path, local_path, excludes=[]):
-    cmd = 'rsync --progress -h -e "ssh -q" -qavz {} "{}:{}/*" "{}/"'.format(" ".join(['--exclude "*/{}"'.format(e) for e in excludes]), host, remote_path, local_path)
+    cmd = 'rsync --progress -h -e "ssh -q" -qavz {} "{}:{}/*" "{}/"'.format(" ".join(['--exclude "{}"'.format(e) for e in excludes]), host, remote_path, local_path)
     system_call(cmd)
 
 

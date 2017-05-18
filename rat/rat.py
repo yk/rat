@@ -33,6 +33,7 @@ def run_config(experiment, config_id, configspec):
     cwd = os.getcwd()
     ls = utils.get_all_files(cwd)
     epat, ipat = utils.exclude_include_patterns(configspec)
+    epat.append('ext/')
 
     fids = utils.save_file_tree(grid, cwd, ls, exclude_patterns=epat, include_patterns=ipat)
     config = dict(spec=configspec)
@@ -258,19 +259,22 @@ def cmdline_export(args):
         export_experiment(exp, path, configs=configs, message=args.message)
 
 
-def wait_and_tail_logs(experiment, config, cpath):
+def wait_and_tail_logs(experiment, config, cpath, checkpoints=False):
     # config = utils.wait_for_running(db, experiment['_id'], config['_id'])
     if config['status'] < Status.running: return
     # cpath = os.path.join(path, config['_id'])
     host, rpath = config['host'], config['path']
-    utils.rsync_remote_folder(host, rpath, cpath, excludes=['ext', 'cls', '*.ckpt*'])
+    excludes = ['ext/*']
+    if not checkpoints:
+        excludes += ['*.ckpt*']
+    utils.rsync_remote_folder(host, rpath, cpath, excludes=excludes)
     clogsdir = os.path.join(cpath, 'logs')
     tfefn = next(f for f in os.listdir(clogsdir) if 'tfevents' in f)
     logging.info('tailing %s from config %s', tfefn, config['_id'])
     # utils.tail_remote_file(host, os.path.join(rpath, 'logs') + '/*tvevents*', os.path.join(cpath, 'logs') + '/*tvevents*')
 
 
-def tensorboard(experiment, port):
+def tensorboard(experiment, port, checkpoints=False):
     with tempfile.TemporaryDirectory() as path:
         done_configs = []
         not_done_configs = []
@@ -297,7 +301,9 @@ def tensorboard(experiment, port):
             cpath = os.path.join(path, utils.dict_to_list(c['spec']), c['_id'])
             # export_config(c, cpath, ['model', 'latest'])
             epat, _ = utils.exclude_include_patterns(c['spec'])
-            epat.append('.ckpt')
+            if not checkpoints:
+                epat.append('.ckpt')
+            epat.append('ext/')
             export_config(c, cpath, exclude_patterns=epat)
             s = Status(c['status'])
             if s == Status.done:
@@ -307,7 +313,7 @@ def tensorboard(experiment, port):
         processes = []
         for c, cpath in not_done_configs:
             # p = Process(target=wait_and_tail_logs, args=(experiment, c, path))
-            p = Thread(target=wait_and_tail_logs, args=(experiment, c, cpath))
+            p = Thread(target=wait_and_tail_logs, args=(experiment, c, cpath, checkpoints))
             p.start()
             processes.append(p)
         for p in processes:
@@ -352,7 +358,7 @@ def cmdline_tb(args):
         exp = find_latest_running_or_done_experiment()
     else:
         exp = find_experiment(args.search_string)
-    tensorboard(exp, port)
+    tensorboard(exp, port, args.checkpoints)
 
 
 def confirm(prompt='Really?'):
@@ -411,6 +417,7 @@ def main():
         parser_tb = subparsers.add_parser("tb", help="open tensorboard")
         parser_tb.add_argument('search_string', nargs='?', default='latest')
         parser_tb.add_argument('-p', '--port', default=6006, type=int)
+        parser_tb.add_argument('-c', '--checkpoints', action='store_true', help="also sync checkpoints")
         parser_tb.set_defaults(func=cmdline_tb)
 
         args = parser.parse_args()

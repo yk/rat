@@ -274,7 +274,7 @@ def wait_and_tail_logs(experiment, config, cpath, checkpoints=False):
     # utils.tail_remote_file(host, os.path.join(rpath, 'logs') + '/*tvevents*', os.path.join(cpath, 'logs') + '/*tvevents*')
 
 
-def tensorboard(experiment, port, checkpoints=False):
+def tensorboard(experiment, port, checkpoints=False, info_only=False):
     with tempfile.TemporaryDirectory() as path:
         done_configs = []
         not_done_configs = []
@@ -292,6 +292,8 @@ def tensorboard(experiment, port, checkpoints=False):
 
         print('Common Attributes:')
         print('\n'.join([k + ": " + str(v) for k, v in zip(common_attrs, common_values)]))
+        if info_only:
+            return
 
         for c in experiment['configs']:
             for cc in common_attrs:
@@ -358,7 +360,7 @@ def cmdline_tb(args):
         exp = find_latest_running_or_done_experiment()
     else:
         exp = find_experiment(args.search_string)
-    tensorboard(exp, port, args.checkpoints)
+    tensorboard(exp, port, args.checkpoints, args.info_only)
 
 
 def confirm(prompt='Really?'):
@@ -418,6 +420,7 @@ def main():
         parser_tb.add_argument('search_string', nargs='?', default='latest')
         parser_tb.add_argument('-p', '--port', default=6006, type=int)
         parser_tb.add_argument('-c', '--checkpoints', action='store_true', help="also sync checkpoints")
+        parser_tb.add_argument('-i', '--info_only', action='store_true', help="only print common attributes")
         parser_tb.set_defaults(func=cmdline_tb)
 
         args = parser.parse_args()

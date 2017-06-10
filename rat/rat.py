@@ -324,7 +324,7 @@ def tensorboard(experiment, port, checkpoints=False, info_only=False):
         with utils.working_directory(path):
             import tensorflow as tf
             from tensorflow.tensorboard.tensorboard import main as tbmain
-            from tensorflow.tensorboard.plugins.projector.plugin import ProjectorPlugin
+            from tensorflow.tensorboard.plugins.projector.projector_plugin import ProjectorPlugin
             flags = tf.app.flags.FLAGS
             flags.port = port
             # done_configs_logdirs = [utils.dict_to_list(c['spec']) + ':' + os.path.join(c['_id'], 'logs') for c in (done_configs + not_done_configs)]

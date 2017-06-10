@@ -59,6 +59,21 @@ def run_experiment(configs, name=None):
         run_config(experiment, str(cid), config)
 
 
+def merge(experiments, name='merged'):
+    exp = {
+            '_id': 'mrg' + str(uuid.uuid4()),
+            'name': name,
+            'start_time': min([e['start_time'] for e in experiments if 'start_time' in e]),
+            'end_time': max([e['end_time'] for e in experiments if 'end_time' in e]),
+            'status': min([e['status'] for e in experiments if 'status' in e]),
+            }
+    configs = list(itertools.chain.from_iterable([e['configs'] for e in experiments]))
+    for i, c in enumerate(configs):
+        c['_id'] = str(i)
+    exp['configs'] = configs
+    db.experiments.insert_one(exp)
+
+
 def find_experiment(search_string, raise_if_none=True):
     e = db.experiments.find({'_id': {'$regex': '^{}'.format(search_string)}})
     s = e.count()
@@ -98,15 +113,16 @@ def kill_all(delete_after=False):
     return nd
 
 
-def delete(experiment):
-    orphans = get_file_ids_for_experiment(experiment)
-    delete_grid_files(orphans)
+def delete(experiment, keep_files=False):
+    if not keep_files:
+        orphans = get_file_ids_for_experiment(experiment)
+        delete_grid_files(orphans)
     db.experiments.remove(experiment['_id'])
 
 
 def cmdline_delete(args):
     exp = find_experiment(args.search_string)
-    delete(exp)
+    delete(exp, args.keep_files)
 
 
 def kill_config(experiment, config):
@@ -127,7 +143,7 @@ def kill_config(experiment, config):
     pop_connection()
 
 
-def kill(experiment, delete_after=False):
+def kill(experiment, delete_after=False, keep_files_on_delete=False):
     for j in rqueue.jobs:
         exp_args = j.args[1]
         if exp_args['_id'] == experiment['_id']:
@@ -137,14 +153,20 @@ def kill(experiment, delete_after=False):
             kill_config(experiment, c)
     db.experiments.update({'_id': experiment['_id']}, {'$set': {'status': Status.killed}})
     if delete_after:
-        delete(experiment)
+        delete(experiment, keep_files_on_delete)
+
+
 
 
 
 def cmdline_kill(args):
     exps = [find_experiment(ss) for ss in args.search_string]
     for exp in exps:
-        kill(exp, delete_after=args.delete)
+        kill(exp, delete_after=args.delete, keep_files_on_delete=args.keep_files)
+
+def cmdline_merge(args):
+    exps = [find_experiment(ss) for ss in args.search_string]
+    merge(exps)
 
 
 def cmdline_delete_all(args):
@@ -397,12 +419,18 @@ def main():
 
         parser_delete = subparsers.add_parser("delete", help="delete an experiment")
         parser_delete.add_argument('search_string')
+        parser_delete.add_argument('-F', '--keep_files', action='store_true', help="keep files")
         parser_delete.set_defaults(func=cmdline_delete)
 
         parser_kill = subparsers.add_parser("kill", help="kill an experiment")
         parser_kill.add_argument('search_string', nargs='+')
         parser_kill.add_argument('-d', '--delete', action='store_true', help="delete after kill")
+        parser_kill.add_argument('-F', '--keep_files', action='store_true', help="keep files on delete")
         parser_kill.set_defaults(func=cmdline_kill)
+
+        parser_merge = subparsers.add_parser("merge", help="merge experiments")
+        parser_merge.add_argument('search_string', nargs='+')
+        parser_merge.set_defaults(func=cmdline_merge)
 
         parser_kill_all = subparsers.add_parser("killall", help="kill all experiments")
         parser_kill_all.add_argument('-d', '--delete', action='store_true', help="delete after kill")

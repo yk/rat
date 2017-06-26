@@ -21,6 +21,7 @@ from rq import Worker, push_connection, pop_connection
 import hashlib
 from collections import Counter
 from tqdm import tqdm
+import pymongo
 
 rat_config = rcfile('rat')
 db, grid = utils.get_mongo(rat_config)
@@ -104,9 +105,15 @@ def delete_all():
     return nd
 
 
-def kill_all(delete_after=False):
+def kill_all(name=None, limit=0, delete_after=False):
     nd = 0
-    for exp in reversed(list(db.experiments.find({}))):
+    query = {}
+    if name:
+        query['name'] = name
+    to_delete = list(db.experiments.find(query).sort('start_time', pymongo.DESCENDING).limit(limit))
+    print('deleting {} experiments'.format(len(to_delete)))
+    confirm()
+    for exp in to_delete:
         nd += 1
         kill(exp, delete_after=delete_after)
         time.sleep(1)
@@ -176,8 +183,7 @@ def cmdline_delete_all(args):
     clean()
 
 def cmdline_kill_all(args):
-    confirm()
-    nd = kill_all(delete_after=args.delete)
+    nd = kill_all(name=args.name, limit=args.limit, delete_after=args.delete)
     print('killed {} experiments'.format(nd))
     clean()
 
@@ -434,6 +440,8 @@ def main():
 
         parser_kill_all = subparsers.add_parser("killall", help="kill all experiments")
         parser_kill_all.add_argument('-d', '--delete', action='store_true', help="delete after kill")
+        parser_kill_all.add_argument('-n', '--name', default=None, help="kill by name")
+        parser_kill_all.add_argument('-l', '--limit', type=int, default=0, help="limit")
         parser_kill_all.set_defaults(func=cmdline_kill_all)
 
         parser_export = subparsers.add_parser("export", help="export an experiment")

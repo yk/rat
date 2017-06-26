@@ -105,14 +105,15 @@ def delete_all():
     return nd
 
 
-def kill_all(name=None, limit=0, delete_after=False):
+def kill_all(name=None, limit=0, delete_after=False, force=False):
     nd = 0
     query = {}
     if name:
         query['name'] = name
     to_delete = list(db.experiments.find(query).sort('start_time', pymongo.DESCENDING).limit(limit))
     print('deleting {} experiments'.format(len(to_delete)))
-    confirm()
+    if not force:
+        confirm()
     for exp in to_delete:
         nd += 1
         kill(exp, delete_after=delete_after)
@@ -183,7 +184,7 @@ def cmdline_delete_all(args):
     clean()
 
 def cmdline_kill_all(args):
-    nd = kill_all(name=args.name, limit=args.limit, delete_after=args.delete)
+    nd = kill_all(name=args.name, limit=args.limit, delete_after=args.delete, force=args.force)
     print('killed {} experiments'.format(nd))
     clean()
 
@@ -442,6 +443,7 @@ def main():
         parser_kill_all.add_argument('-d', '--delete', action='store_true', help="delete after kill")
         parser_kill_all.add_argument('-n', '--name', default=None, help="kill by name")
         parser_kill_all.add_argument('-l', '--limit', type=int, default=0, help="limit")
+        parser_kill_all.add_argument('-f', '--force', action='store_true', help="do not confirm")
         parser_kill_all.set_defaults(func=cmdline_kill_all)
 
         parser_export = subparsers.add_parser("export", help="export an experiment")

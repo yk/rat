@@ -186,8 +186,6 @@ def cmdline_delete_all(args):
 def cmdline_kill_all(args):
     nd = kill_all(name=args.name, limit=args.limit, delete_after=args.delete, force=args.force)
     print('killed {} experiments'.format(nd))
-    if args.name or args.limit:
-        return
     clean()
 
 

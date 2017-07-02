@@ -30,20 +30,35 @@ rqueue = utils.get_redis(rat_config)
 # logging.root.setLevel(logging.INFO)
 
 
-def run_config(experiment, config_id, configspec):
+def get_free_config_id(experiment):
+    return max([int(c['_id']) for c in experiment['configs']] + [-1]) + 1
+
+
+def run_config(experiment, config_id, configspec, file_ids=None):
     cwd = os.getcwd()
     ls = utils.get_all_files(cwd)
     epat, ipat = utils.exclude_include_patterns(configspec)
     epat.append('ext/')
 
-    fids = utils.save_file_tree(grid, cwd, ls, exclude_patterns=epat, include_patterns=ipat)
+    if file_ids is None:
+        file_ids = utils.save_file_tree(grid, cwd, ls, exclude_patterns=epat, include_patterns=ipat)
     config = dict(spec=configspec)
     config['_id'] = config_id
-    config['files'] = fids
+    config['files'] = file_ids
     config['status'] = Status.enqueued
     db.experiments.update({'_id': experiment['_id']}, {'$push': {'configs': config}})
 
     rqueue.enqueue(worker.run_config, rat_config, experiment, config, timeout=24 * 60 * 60)
+
+
+def rerun_config(experiment, config_id):
+    config = [c for c in experiment['configs'] if c['_id'] == config_id]
+    assert len(config) == 1
+    config = config[0]
+    free_id = get_free_config_id(experiment)
+    new_fids = [utils.duplicate_file(fid) for fid in config['files']]
+    run_config(experiment, free_id, config['spec'], new_fids)
+
 
 def run_experiment(configs, name=None):
     exp_id = str(uuid.uuid4())

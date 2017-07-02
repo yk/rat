@@ -118,6 +118,21 @@ def close_mongo():
     mongo_client.close()
 
 
+def ensure_fid(fid):
+    return fid if isinstance(fid, ObjectId) else ObjectId(fid)
+
+
+def gfile_name(gfile):
+    return gfile.name or str(gfile._id)
+
+
+def duplicate_file(grid, fid):
+    with grid.get(ensure_fid(fid)) as gfile:
+        fn = gfile_name(gfile)
+        new_fid = grid.put(gfile, filename=fn)
+    return str(new_fid)
+
+
 def save_file_tree(grid, base_dir, filenames, exclude_patterns=[], include_patterns=[]):
     fids = []
     for fn in filenames:
@@ -137,7 +152,7 @@ def load_file_tree(grid, base_dir, file_ids, exclude_patterns=[], include_patter
     files = []
     for fid in file_ids:
         try:
-            gfile = grid.get(fid if isinstance(fid, ObjectId) else ObjectId(fid))
+            gfile = grid.get(ensure_fid(fid))
         except:
             if raise_on_error:
                 raise

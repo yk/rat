@@ -126,6 +126,11 @@ def gfile_name(gfile):
     return gfile.name or str(gfile._id)
 
 
+def duplicate_files(grid, file_ids):
+    new_fids = [utils.duplicate_file(grid, fid) for fid in config['files']]
+    return new_fids
+
+
 def duplicate_file(grid, fid):
     with grid.get(ensure_fid(fid)) as gfile:
         fn = gfile_name(gfile)

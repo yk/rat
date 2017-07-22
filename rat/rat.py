@@ -12,6 +12,7 @@ import uuid
 import time
 from rat import worker
 from rat import utils
+from rat import hyperopt
 from rat.utils import Status
 from terminaltables import AsciiTable
 from multiprocessing import Process
@@ -51,16 +52,25 @@ def run_config(experiment, config_id, configspec, file_ids=None):
     rqueue.enqueue(worker.run_config, rat_config, experiment, config, timeout=24 * 60 * 60)
 
 
-def rerun_config(experiment, config_id):
+def get_config(experiment, config_id):
     config = [c for c in experiment['configs'] if c['_id'] == config_id]
     assert len(config) == 1
     config = config[0]
+    return config
+
+
+def rerun_config(experiment, config):
     free_id = get_free_config_id(experiment)
-    new_fids = [utils.duplicate_file(fid) for fid in config['files']]
+    new_fids = utils.duplicate_files(grid, config['files'])
     run_config(experiment, free_id, config['spec'], new_fids)
 
 
-def run_experiment(configs, name=None):
+def restart_config(experiment, config):
+    kill_config(experiment, config)
+    rerun_config(experiment, config)
+
+
+def run_experiment(configs, main_file, name=None, hopt_id=None):
     exp_id = str(uuid.uuid4())
     name = name or os.getcwd().split('/')[-1]
     experiment = {
@@ -68,11 +78,38 @@ def run_experiment(configs, name=None):
             'name': name,
             'configs': [],
             'start_time': time.time(),
-            'status': Status.enqueued
+            'status': Status.enqueued,
+            'main_file': main_file,
+            'hopt_id': hopt_id,
             }
     db.experiments.insert_one(experiment)
     for cid, config in enumerate(configs):
         run_config(experiment, str(cid), config)
+    return experiment
+
+
+def run_hyperopt(hyperopt_spec, search_strategy, main_file, queue_size=10, name=None):
+    hopt_id = str(uuid.uuid4())
+    exp = run_experiment([], main_file, name=name, hopt_id=hopt_id)
+
+    cwd = os.getcwd()
+    ls = utils.get_all_files(cwd)
+    epat, ipat = utils.exclude_include_patterns(configspec)
+    epat.append('ext/')
+
+    file_ids = utils.save_file_tree(grid, cwd, ls, exclude_patterns=epat, include_patterns=ipat)
+
+    hopt = {
+        '_id': hopt_id,
+        'experiment_id': exp._id,
+        'start_time': time.time(),
+        'spec': hyperopt_spec,
+        'search_strategy': search_strategy,
+        'state': {},
+        'files': file_ids,
+        'queue_size': queue_size,
+        }
+    db.hyperopt.insert_one(hopt)
 
 
 def merge(experiments, name='merged'):
@@ -148,6 +185,21 @@ def cmdline_delete(args):
     delete(exp, args.keep_files)
 
 
+def cmdline_rerun(args):
+    exp = find_experiment(args.search_string)
+    config = get_config(exp, args.config_id)
+    rerun_config(exp, config)
+
+
+def cmdline_abort(args):
+    exp = find_experiment(args.search_string)
+    config = get_config(exp, args.config_id)
+    if args.rerun:
+        rerun_config(exp, config)
+    else:
+        kill_config(exp, config)
+
+
 def kill_config(experiment, config):
     push_connection(rqueue.connection)
     for w in Worker.all():
@@ -179,9 +231,6 @@ def kill(experiment, delete_after=False, keep_files_on_delete=False):
         delete(experiment, keep_files_on_delete)
 
 
-
-
-
 def cmdline_kill(args):
     exps = [find_experiment(ss) for ss in args.search_string]
     for exp in exps:
@@ -191,6 +240,11 @@ def cmdline_merge(args):
     exps = [find_experiment(ss) for ss in args.search_string]
     merge(exps)
 
+
+def cmdline_hopt(args):
+    hopt = db.hyperopt.find_one({})
+    if hopt:
+        hyperopt.do_hyperopt(rat_config, hopt['_id'])
 
 def cmdline_delete_all(args):
     confirm()
@@ -202,7 +256,6 @@ def cmdline_kill_all(args):
     nd = kill_all(name=args.name, limit=args.limit, delete_after=args.delete, force=args.force)
     print('killed {} experiments'.format(nd))
     clean()
-
 
 def status(limit=10):
     exps = db.experiments.find({}, limit=limit, sort=[('start_time', -1)])
@@ -220,23 +273,55 @@ def status(limit=10):
 
         e['cstats'] = cstats
 
+    hopts = db.hyperopt.find({}, limit=limit, sort=[('start_time', -1)])
+
     jobs = rqueue.jobs
-    return reversed(list(exps)), jobs
+    return reversed(list(exps)), reversed(list(hopts)), jobs
 
 
 TIMEFORMAT = '%d.%m. %H:%M:%S'
 
 
+def cmdline_info(args):
+    def get_table():
+        if args.search_string == 'latest':
+            exp = find_latest_running_or_done_experiment()
+        else:
+            exp = find_experiment(args.search_string)
+        common_attrs, common_values = get_common_attributes(exp)
+        configs = exp['configs']
+        table_data = [['Id', 'Status', 'Host', 'Parameters']]
+        for c in configs:
+            remove_common_attributes(c, common_attrs)
+            spec = ' '.join(['{}={}'.format(sk, sv) for sk, sv in c['spec'].items()])
+
+            table_data.append([c['_id'], Status(c['status']).name, c.get('host', '-'), spec])
+        cas = ' '.join(['{}={}'.format(sk, sv) for sk, sv in zip(common_attrs, common_values)])
+        return AsciiTable(table_data).table + '\n' + cas
+
+    if args.follow:
+        utils.display_continuous(get_table, 1)
+    else:
+        print(get_table())
+
+
+
 def cmdline_status(args):
     def get_table():
-        exps, jobs = status(args.limit)
+        exps, hopts, jobs = status(args.limit)
         table_data = [['Id', 'Name', 'Status', 'Q', 'R', 'D', 'Start Time', 'End Time']]
         for e in exps:
             cstats = e['cstats']
             q, r, d = cstats[Status.enqueued], cstats[Status.running], cstats[Status.done]
             end_time = time.strftime(TIMEFORMAT, time.localtime(e['end_time'])) if 'end_time' in e else '-'
-            table_data.append([e['_id'][:6], e['name'], Status(e['status']).name, q, r, d, time.strftime(TIMEFORMAT, time.localtime(e['start_time'])), end_time])
-        return AsciiTable(table_data).table + '\n' + '{} jobs in queue'.format(len(jobs))
+            exp_id = e['_id'][:6]
+            if 'hopt_id' in e:
+                exp_id += '*'
+            table_data.append([exp_id, e['name'], Status(e['status']).name, q, r, d, time.strftime(TIMEFORMAT, time.localtime(e['start_time'])), end_time])
+        table_data_2 = [['Id', 'Name', 'Start Time']]
+        for h in hopts:
+            table_data_2.append([h['_id'][:6], h['name'], time.localtime(e['start_time'])])
+        return AsciiTable(table_data).table + '\n' + AsciiTable(table_data_2).table + '\n' + '{} jobs in queue'.format(len(jobs))
 
     if args.follow:
         utils.display_continuous(get_table, 1)
@@ -317,21 +402,43 @@ def wait_and_tail_logs(experiment, config, cpath, checkpoints=False):
     # utils.tail_remote_file(host, os.path.join(rpath, 'logs') + '/*tvevents*', os.path.join(cpath, 'logs') + '/*tvevents*')
 
 
+def sync_configs(experiment, configs_and_paths, checkpoints=False):
+    processes = []
+    for c, cpath in configs_and_paths:
+        # p = Process(target=wait_and_tail_logs, args=(experiment, c, path))
+        p = Thread(target=wait_and_tail_logs, args=(experiment, c, cpath, checkpoints))
+        p.start()
+        processes.append(p)
+    for p in processes:
+        p.join()
+
+
+def get_common_attributes(experiment):
+    spec_items = sorted(itertools.chain.from_iterable([c['spec'].items() for c in experiment['configs']]), key=lambda p:p[0])
+    ctr = [(k, len(set(g))) for k, g in itertools.groupby(spec_items, lambda p:p[0])]
+    common_attrs = [k for k, c in ctr if c == 1]
+    common_values = []
+    for k in common_attrs:
+        v = None
+        for c in experiment['configs']:
+            if k in c['spec']:
+                v = c['spec'][k]
+                break
+        common_values.append(v)
+    return common_attrs, common_values
+
+
+def remove_common_attributes(config, common_attributes):
+    for cc in common_attributes:
+        if cc in config['spec']:
+            del config['spec'][cc]
+
+
 def tensorboard(experiment, port, checkpoints=False, info_only=False):
     with tempfile.TemporaryDirectory() as path:
         done_configs = []
         not_done_configs = []
-        spec_items = sorted(itertools.chain.from_iterable([c['spec'].items() for c in experiment['configs']]), key=lambda p:p[0])
-        ctr = [(k, len(set(g))) for k, g in itertools.groupby(spec_items, lambda p:p[0])]
-        common_attrs = [k for k, c in ctr if c == 1]
-        common_values = []
-        for k in common_attrs:
-            v = None
-            for c in experiment['configs']:
-                if k in c['spec']:
-                    v = c['spec'][k]
-                    break
-            common_values.append(v)
+        common_attrs, common_values = get_common_attributes(experiment)
 
         print('Common Attributes:')
         print('\n'.join([k + ": " + str(v) for k, v in zip(common_attrs, common_values)]))
@@ -339,9 +446,7 @@ def tensorboard(experiment, port, checkpoints=False, info_only=False):
             return
 
         for c in experiment['configs']:
-            for cc in common_attrs:
-                if cc in c['spec']:
-                    del c['spec'][cc]
+            remove_common_attributes(c, common_attrs)
             # cpath = os.path.join(path, c['_id'])
             cpath = os.path.join(path, utils.dict_to_list(c['spec']), c['_id'])
             # export_config(c, cpath, ['model', 'latest'])
@@ -356,13 +461,7 @@ def tensorboard(experiment, port, checkpoints=False, info_only=False):
             elif s < Status.done:
                 not_done_configs.append((c, cpath))
         processes = []
-        for c, cpath in not_done_configs:
-            # p = Process(target=wait_and_tail_logs, args=(experiment, c, path))
-            p = Thread(target=wait_and_tail_logs, args=(experiment, c, cpath, checkpoints))
-            p.start()
-            processes.append(p)
-        for p in processes:
-            p.join()
+        sync_configs(experiment, not_done_configs, checkpoints=checkpoints)
 
         with utils.working_directory(path):
             import tensorflow as tf
@@ -438,6 +537,11 @@ def main():
         # parser_run.add_argument('-s', '--shuffle', action='store_true', help="shuffle the created configurations before distributing")
         # parser_run.set_defaults(func=run)
 
+        parser_info = subparsers.add_parser("info", help="info of an experiment")
+        parser_info.add_argument('search_string', nargs='?', default='latest')
+        parser_info.add_argument('-f', '--follow', action='store_true', help='continuously output status')
+        parser_info.set_defaults(func=cmdline_info)
+
         parser_delete = subparsers.add_parser("delete", help="delete an experiment")
         parser_delete.add_argument('search_string')
         parser_delete.add_argument('-F', '--keep_files', action='store_true', help="keep files")
@@ -448,6 +552,17 @@ def main():
         parser_kill.add_argument('-d', '--delete', action='store_true', help="delete after kill")
         parser_kill.add_argument('-F', '--keep_files', action='store_true', help="keep files on delete")
         parser_kill.set_defaults(func=cmdline_kill)
+
+        parser_rerun = subparsers.add_parser("rerun", help="rerun a config")
+        parser_rerun.add_argument('search_string')
+        parser_rerun.add_argument('config_id')
+        parser_rerun.set_defaults(func=cmdline_rerun)
+
+        parser_abort = subparsers.add_parser("abort", help="abort a config")
+        parser_abort.add_argument('search_string')
+        parser_abort.add_argument('config_id')
+        parser_abort.add_argument('-r', '--rerun', action='store_true', help='rerun the config')
+        parser_abort.set_defaults(func=cmdline_abort)
 
         parser_merge = subparsers.add_parser("merge", help="merge experiments")
         parser_merge.add_argument('search_string', nargs='+')
@@ -474,6 +589,9 @@ def main():
         parser_tb.add_argument('-c', '--checkpoints', action='store_true', help="also sync checkpoints")
         parser_tb.add_argument('-i', '--info_only', action='store_true', help="only print common attributes")
         parser_tb.set_defaults(func=cmdline_tb)
+
+        parser_hopt = subparsers.add_parser("hopt", help="do hyperoptimization")
+        parser_hopt.set_defaults(func=cmdline_hopt)
 
         args = parser.parse_args()
 

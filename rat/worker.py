@@ -169,7 +169,7 @@ def run_config(rat_config, experiment, config):
         utils.load_file_tree(grid, path, config['files'])
 
         db.experiments.update({'_id': experiment['_id'], 'configs._id': config['_id']}, {'$set': {'configs.$.status': Status.running, 'status': Status.running, 'configs.$.host': host, 'configs.$.path': path}})
-        main_file = config['spec']['main_file']
+        main_file = experiment['main_file']
         start_time = time.time()
         # utils.system_call('python3 {} > stdout.txt 2> stderr.txt'.format(main_file))
         flags = utils.dict_to_flags(config['spec'])

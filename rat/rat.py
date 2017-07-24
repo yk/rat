@@ -88,28 +88,44 @@ def run_experiment(configs, main_file, name=None, hopt_id=None):
     return experiment
 
 
-def run_hyperopt(hyperopt_spec, search_strategy, main_file, queue_size=10, name=None):
+def get_experiment_for_hyperopt(hopt):
+    exp = None
+    if 'experiment_id' in hopt:
+        exp = db.experiments.find_one(hopt['experiment_id'])
+    if exp is None:
+        exp = run_experiment([], hopt['main_file'], name='ho_' + hopt['name'], hopt_id=hopt['_id'])
+        db.hyperopt.update({'_id': hopt['_id']}, {'$set': {'experiment_id': exp['_id']}})
+    return exp
+
+
+def run_hyperopt(hyperopt_spec, search_strategy, main_file, queue_size=1, name=None):
     hopt_id = str(uuid.uuid4())
-    exp = run_experiment([], main_file, name=name, hopt_id=hopt_id)
+    name = name or os.getcwd().split('/')[-1]
 
     cwd = os.getcwd()
     ls = utils.get_all_files(cwd)
-    epat, ipat = utils.exclude_include_patterns(configspec)
+    epat, ipat = utils.exclude_include_patterns(hyperopt_spec)
     epat.append('ext/')
 
     file_ids = utils.save_file_tree(grid, cwd, ls, exclude_patterns=epat, include_patterns=ipat)
 
     hopt = {
         '_id': hopt_id,
-        'experiment_id': exp._id,
+        'name': name,
         'start_time': time.time(),
         'spec': hyperopt_spec,
         'search_strategy': search_strategy,
         'state': {},
+        'history': [],
+        'main_file': main_file,
         'files': file_ids,
         'queue_size': queue_size,
         }
+
     db.hyperopt.insert_one(hopt)
+
+    exp = get_experiment_for_hyperopt(hopt)
+
 
 
 def merge(experiments, name='merged'):
@@ -127,14 +143,27 @@ def merge(experiments, name='merged'):
     db.experiments.insert_one(exp)
 
 
-def find_experiment(search_string, raise_if_none=True):
-    e = db.experiments.find({'_id': {'$regex': '^{}'.format(search_string)}})
+def find_experiment(*args, **kwargs):
+    return find_entity('experiments', *args, **kwargs)
+
+def find_hyperopt(*args, **kwargs):
+    return find_entity('hyperopt', *args, **kwargs)
+
+def find_entity(collection_name, search_string, raise_if_none=True, allow_relative=False):
+    if allow_relative and search_string and search_string.startswith('-'):
+        n = int(search_string[1:])
+        e = db[collection_name].find({}, sort=[('start_time', -1)], limit=n)
+        if e.count() < n:
+            raise Exception('Not enough {}'.format(collection_name))
+        return list(e)[n-1]
+
+    e = db[collection_name].find({'_id': {'$regex': '^{}'.format(search_string)}})
     s = e.count()
     if s > 1:
         raise Exception('Ambiguous search string: {}'.format(search_string))
     if s < 1:
         if raise_if_none:
-            raise Exception('Experiment {} not found'.format(search_string))
+            raise Exception('Search string {} not found'.format(search_string))
         return None
     return next(e)
 
@@ -241,10 +270,8 @@ def cmdline_merge(args):
     merge(exps)
 
 
-def cmdline_hopt(args):
-    hopt = db.hyperopt.find_one({})
-    if hopt:
-        hyperopt.do_hyperopt(rat_config, hopt['_id'])
+def cmdline_hopt_step(hopt, args):
+    hyperopt.do_hyperopt_step(hopt)
 
 def cmdline_delete_all(args):
     confirm()
@@ -318,9 +345,9 @@ def cmdline_status(args):
             if 'hopt_id' in e:
                 exp_id += '*'
             table_data.append([exp_id, e['name'], Status(e['status']).name, q, r, d, time.strftime(TIMEFORMAT, time.localtime(e['start_time'])), end_time])
-        table_data_2 = [['Id', 'Name', 'Start Time']]
+        table_data_2 = [['Id', 'Name', 'Experiment', 'Start Time']]
         for h in hopts:
-            table_data_2.append([h['_id'][:6], h['name'], time.localtime(e['start_time'])])
+            table_data_2.append([h['_id'][:6], h['name'], h.get('experiment_id', '-')[:6], time.strftime(TIMEFORMAT, time.localtime(e['start_time']))])
         return AsciiTable(table_data).table + '\n' + AsciiTable(table_data_2).table + '\n' + '{} jobs in queue'.format(len(jobs))
 
     if args.follow:
@@ -346,7 +373,8 @@ def delete_grid_files(file_ids):
 
 
 def clean():
-    fileids = list(itertools.chain.from_iterable(map(lambda e: get_file_ids_for_experiment(e), db.experiments.find({}, {'configs.files': 1, 'configs.resultfiles': 1}))))
+    fileids = list(itertools.chain.from_iterable(map(get_file_ids_for_experiment, db.experiments.find({}, {'configs.files': 1, 'configs.resultfiles': 1}))))
+    fileids += list(itertools.chain.from_iterable(map(get_file_ids_for_config, db.hyperopt.find({}, {'files': 1}))))
     orphans = grid.find({'_id': {'$nin': fileids}})
     return delete_grid_files([o._id for o in orphans])
 
@@ -590,13 +618,20 @@ def main():
         parser_tb.add_argument('-i', '--info_only', action='store_true', help="only print common attributes")
         parser_tb.set_defaults(func=cmdline_tb)
 
+
         parser_hopt = subparsers.add_parser("hopt", help="do hyperoptimization")
-        parser_hopt.set_defaults(func=cmdline_hopt)
+        parser_hopt.add_argument('search_string', type=str, help="hopt id")
+        hoptparsers = parser_hopt.add_subparsers(dest="hoptcommand", help="hopt command")
+
+        parser_hopt_step = hoptparsers.add_parser("step", help="do hopt step")
+        parser_hopt_step.set_defaults(func=cmdline_hopt_step)
 
         args = parser.parse_args()
 
-        command = args.command
-        if hasattr(args, 'func'):
+        if args.command == 'hopt':
+            hopt = find_hyperopt(args.search_string, allow_relative=True)
+            args.func(hopt, args)
+        elif hasattr(args, 'func'):
             args.func(args)
         else:
             parser.parse_args(['-h'])

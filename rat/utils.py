@@ -13,6 +13,7 @@ import logging
 import curses
 import subprocess
 import contextlib
+import json
 
 mongo_client = None
 
@@ -127,7 +128,7 @@ def gfile_name(gfile):
 
 
 def duplicate_files(grid, file_ids):
-    new_fids = [utils.duplicate_file(grid, fid) for fid in config['files']]
+    new_fids = [duplicate_file(grid, fid) for fid in file_ids]
     return new_fids
 
 
@@ -169,7 +170,7 @@ def load_file_tree(grid, base_dir, file_ids, exclude_patterns=[], include_patter
         local_abs_path = os.path.abspath(os.path.join(base_dir, fn))
         folder_path, _ = os.path.split(local_abs_path)
         os.makedirs(folder_path, exist_ok=True)
-        logging.info("restoring %s as %s", fn, local_abs_path)
+        logging.debug("restoring %s as %s", fn, local_abs_path)
         with open(local_abs_path, 'wb') as f:
             f.write(gfile.read())
         files.append((fid, fn, local_abs_path))
@@ -229,6 +230,11 @@ def dict_to_list(d: dict):
 
 def dict_to_with(d : dict):
     return " ".join(['with {}="{}"'.format(k, v) for k, v in d.items()])
+
+
+def configs_equal(c1: dict, c2: dict):
+    return c1 == c2
+    # return json.dumps(c1, sort_keys=True) == json.dumps(c2, sort_keys=True)
 
 
 if __name__ == '__main__':

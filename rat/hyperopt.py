@@ -5,14 +5,14 @@ import os
 from rat import worker
 from rat import utils
 from rat.utils import Status
-import confprod
 import logging
 import tempfile
-import tensorflow as tf
 import numpy as np
+import itertools as itt
 
 
 def read_tfevents(fn):
+    import tensorflow as tf
     s = list(tf.train.summary_iterator(fn))[1:]
     return s
 
@@ -61,32 +61,62 @@ class SummaryScalarExtractor(Extractor):
         evts = read_tfevents(glob(os.path.join(path, 'logs') + '/*.tfevents.*')[0])
         v = {}
         for k in self.keys:
-            vs = extract_tfevent_scalar(evts, k)
+            _, vs = extract_tfevent_scalar(evts, k)
             v[k] = np.mean(vs[-self.average_over:])
         return v
 
+class Scorer:
+    def score(self, extracted):
+        return 1.
+
+class SimpleValueScorer(Scorer):
+    def __init__(self, key, lower_is_better=False):
+        self.key = key
+        self.lower_is_better = lower_is_better
+    
+    def score(self, extracted):
+        s = extracted.get(self.key, -np.inf)
+        if self.lower_is_better:
+            s = -s
+        return s
+
 
 class HyperoptStrategyBase:
-    def __init__(self, args, experiment, state, spec):
+    def __init__(self, args, experiment, state, spec, history):
         self.args = args
         self.experiment = experiment
         self.state = state
         self.spec = spec
+        self.history = history
+
+    def get_running_or_done_specs(self):
+        return [c['spec'] for c in self.experiment['configs']] + [h['spec'] for h in self.history]
 
     def get_next_config(self):
+        import confprod
         for _ in range(100):
             config = confprod.generate_configurations(self.spec, 1)[0]
             if self.args.get('reschedule', True):
                 return config
-            if config not in [c['spec'] for c in self.experiment['configs']]:
+            if config not in self.get_running_or_done_specs():
                 return config
         logging.info('cant find new config')
 
     def get_extractors(self):
         return [
                 ValueExtractor(['status', 'start_time', 'end_time']),
-                SummaryScalarExtractor(['c_loss']),
                 ]
+
+    def get_scorers(self):
+        return [
+                Scorer(),
+                ]
+
+    def score(self, extracted):
+        for s in self.get_scorers()[::-1]:
+            ss = s.score(extracted)
+            if ss is not None:
+                return ss
 
     def extract(self, config):
         from rat import rat
@@ -101,11 +131,24 @@ class HyperoptStrategyBase:
         return values
 
 
+class SummaryScalarStrategy:
+    def get_extractors(self):
+        return [SummaryScalarExtractor([self.args['key']])]
 
-def build_hyperopt_strategy(definition, experiment, state, spec):
-    class HyperoptStrategy(HyperoptStrategyBase):
+    def get_scorers(self):
+        return [SimpleValueScorer(self.args['key'], self.args.get('lower_is_better'))]
+
+
+
+def build_hyperopt_strategy(definition, experiment, state, spec, history):
+    bases = [HyperoptStrategyBase]
+    name = definition.get('name')
+    if name == 'summary_scalar':
+        bases.append(SummaryScalarStrategy)
+    class HyperoptStrategy(*bases[::-1]):
         pass
-    return HyperoptStrategy(definition, experiment, state, spec)
+    strategy = HyperoptStrategy(definition.get('args', {}), experiment, state, spec, history)
+    return strategy
 
 
 class HyperoptWorker(worker.ConditionTermWorker):
@@ -120,19 +163,28 @@ def do_hyperopt_step(hopt):
     configs_in_queue = len([c for c in exp['configs'] if c['status'] < Status.running])
 
     if configs_in_queue >= hopt['queue_size']:
+        logging.info('queue full')
         return
 
-    search_strategy = build_hyperopt_strategy(hopt['search_strategy'], exp, hopt['state'], hopt['spec'])
+    search_strategy = build_hyperopt_strategy(hopt['search_strategy'], exp, hopt['state'], hopt['spec'], hopt['history'])
 
-    # new_done = [c for c in exp['configs'] if c['status'] >= Status.done and c['_id'] not in hopt['history']]
-    new_done = [c for c in exp['configs'] if c['status'] >= Status.done]
+    new_done = [c for c in exp['configs'] if c['status'] >= Status.done and c['_id'] not in [h['_id'] for h in hopt['history']]]
 
     for ndc in new_done:
         hist_vals = search_strategy.extract(ndc)
         hist_vals['_id'] = ndc['_id']
+        hist_vals['spec'] = ndc['spec']
         logging.info('adding %s to history', hist_vals)
+        logging.info('score = %f', search_strategy.score(hist_vals))
         hopt['history'].append(hist_vals)
         rat.db.hyperopt.update({'_id': hopt['_id']}, {'$push': {'history': hist_vals}})
+
+    best_ids = [h['_id'] for h in itt.islice(sorted(hopt['history'], key=lambda h: search_strategy.score(h), reverse=True), hopt['keep_best'])]
+
+    for c in exp['configs']:
+        if c['status'] >= Status.done and c['_id'] not in best_ids:
+            logging.info('deleting config %s because it is not best', c)
+            rat.delete_config(exp, c)
 
     config = search_strategy.get_next_config()
 

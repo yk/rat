@@ -14,6 +14,7 @@ import curses
 import subprocess
 import contextlib
 import json
+import sh
 
 mongo_client = None
 
@@ -137,6 +138,13 @@ def duplicate_file(grid, fid):
         fn = gfile_name(gfile)
         new_fid = grid.put(gfile, filename=fn)
     return str(new_fid)
+
+
+def notify(title, text):
+    try:
+        sh.Command('reattach-to-user-namespace')('osascript', '-e', 'display notification "{}" with title "{}"'.format(text, title))
+    except:
+        logging.info('notify failed')
 
 
 def save_file_tree(grid, base_dir, filenames, exclude_patterns=[], include_patterns=[]):

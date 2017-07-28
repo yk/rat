@@ -32,7 +32,7 @@ rqueue = utils.get_redis(rat_config)
 
 
 def get_free_config_id(experiment):
-    return max([int(c['_id']) for c in experiment['configs']] + [-1]) + 1
+    return str(max([int(c['_id']) for c in experiment['configs']] + [-1]) + 1)
 
 
 def run_config(experiment, config_id, configspec, file_ids=None):
@@ -98,7 +98,7 @@ def get_experiment_for_hyperopt(hopt):
     return exp
 
 
-def run_hyperopt(hyperopt_spec, search_strategy, main_file, queue_size=1, name=None):
+def run_hyperopt(hyperopt_spec, search_strategy, main_file, queue_size=1, keep_best=3, name=None):
     hopt_id = str(uuid.uuid4())
     name = name or os.getcwd().split('/')[-1]
 
@@ -120,6 +120,7 @@ def run_hyperopt(hyperopt_spec, search_strategy, main_file, queue_size=1, name=N
         'main_file': main_file,
         'files': file_ids,
         'queue_size': queue_size,
+        'keep_best': keep_best,
         }
 
     db.hyperopt.insert_one(hopt)
@@ -207,6 +208,13 @@ def delete(experiment, keep_files=False):
         orphans = get_file_ids_for_experiment(experiment)
         delete_grid_files(orphans)
     db.experiments.remove(experiment['_id'])
+
+
+def delete_config(experiment, config, keep_files=False):
+    if not keep_files:
+        orphans = get_file_ids_for_config(config)
+        delete_grid_files(orphans)
+    db.experiments.update({'_id': experiment['_id']}, {'$pull': {'configs': {'_id': config['_id']}}})
 
 
 def cmdline_delete(args):
@@ -342,12 +350,12 @@ def cmdline_status(args):
             q, r, d = cstats[Status.enqueued], cstats[Status.running], cstats[Status.done]
             end_time = time.strftime(TIMEFORMAT, time.localtime(e['end_time'])) if 'end_time' in e else '-'
             exp_id = e['_id'][:6]
-            if 'hopt_id' in e:
+            if e.get('hopt_id'):
                 exp_id += '*'
             table_data.append([exp_id, e['name'], Status(e['status']).name, q, r, d, time.strftime(TIMEFORMAT, time.localtime(e['start_time'])), end_time])
         table_data_2 = [['Id', 'Name', 'Experiment', 'Start Time']]
         for h in hopts:
-            table_data_2.append([h['_id'][:6], h['name'], h.get('experiment_id', '-')[:6], time.strftime(TIMEFORMAT, time.localtime(e['start_time']))])
+            table_data_2.append([h['_id'][:6], h['name'], h.get('experiment_id', '-')[:6], time.strftime(TIMEFORMAT, time.localtime(h['start_time']))])
         return AsciiTable(table_data).table + '\n' + AsciiTable(table_data_2).table + '\n' + '{} jobs in queue'.format(len(jobs))
 
     if args.follow:
@@ -529,7 +537,7 @@ def cmdline_tb(args):
     if args.search_string == 'latest':
         exp = find_latest_running_or_done_experiment()
     else:
-        exp = find_experiment(args.search_string)
+        exp = find_experiment(args.search_string, allow_relative=True)
     tensorboard(exp, port, args.checkpoints, args.info_only)
 
 

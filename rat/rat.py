@@ -77,7 +77,7 @@ def run_experiment(configs, main_file, name=None, hopt_id=None, file_ids=None):
 
     cwd = os.getcwd()
     ls = utils.get_all_files(cwd)
-    epat, ipat = utils.exclude_include_patterns(configspec)
+    epat, ipat = utils.exclude_include_patterns({})
     epat.append('ext/')
 
     if file_ids is None:

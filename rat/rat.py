@@ -35,17 +35,9 @@ def get_free_config_id(experiment):
     return str(max([int(c['_id']) for c in experiment['configs']] + [-1]) + 1)
 
 
-def run_config(experiment, config_id, configspec, file_ids=None):
-    cwd = os.getcwd()
-    ls = utils.get_all_files(cwd)
-    epat, ipat = utils.exclude_include_patterns(configspec)
-    epat.append('ext/')
-
-    if file_ids is None:
-        file_ids = utils.save_file_tree(grid, cwd, ls, exclude_patterns=epat, include_patterns=ipat)
+def run_config(experiment, config_id, configspec):
     config = dict(spec=configspec)
     config['_id'] = config_id
-    config['files'] = file_ids
     config['status'] = Status.enqueued
     db.experiments.update({'_id': experiment['_id']}, {'$push': {'configs': config}})
 
@@ -61,8 +53,8 @@ def get_config(experiment, config_id):
 
 def rerun_config(experiment, config):
     free_id = get_free_config_id(experiment)
-    new_fids = utils.duplicate_files(grid, config['files'])
-    run_config(experiment, free_id, config['spec'], new_fids)
+    # new_fids = utils.duplicate_files(grid, config['files'])
+    run_config(experiment, free_id, config['spec'])
 
 
 def restart_config(experiment, config):
@@ -70,7 +62,7 @@ def restart_config(experiment, config):
     rerun_config(experiment, config)
 
 
-def run_experiment(configs, main_file, name=None, hopt_id=None):
+def run_experiment(configs, main_file, name=None, hopt_id=None, file_ids=None):
     exp_id = str(uuid.uuid4())
     name = name or os.getcwd().split('/')[-1]
     experiment = {
@@ -82,6 +74,16 @@ def run_experiment(configs, main_file, name=None, hopt_id=None):
             'main_file': main_file,
             'hopt_id': hopt_id,
             }
+
+    cwd = os.getcwd()
+    ls = utils.get_all_files(cwd)
+    epat, ipat = utils.exclude_include_patterns(configspec)
+    epat.append('ext/')
+
+    if file_ids is None:
+        file_ids = utils.save_file_tree(grid, cwd, ls, exclude_patterns=epat, include_patterns=ipat)
+
+    experiment['files'] = file_ids
     db.experiments.insert_one(experiment)
     for cid, config in enumerate(configs):
         run_config(experiment, str(cid), config)
@@ -318,7 +320,7 @@ TIMEFORMAT = '%d.%m. %H:%M:%S'
 
 
 def cmdline_info(args):
-    def get_table():
+    def get_table(state):
         if args.search_string == 'latest':
             exp = find_latest_running_or_done_experiment()
         else:
@@ -337,12 +339,15 @@ def cmdline_info(args):
     if args.follow:
         utils.display_continuous(get_table, 1)
     else:
-        print(get_table())
+        print(get_table({}))
 
 
 
 def cmdline_status(args):
-    def get_table():
+    def get_table(state):
+        first_time = 'done' not in state
+        if first_time:
+            state['done'] = []
         exps, hopts, jobs = status(args.limit)
         table_data = [['Id', 'Name', 'Status', 'Q', 'R', 'D', 'Start Time', 'End Time']]
         for e in exps:
@@ -353,6 +358,13 @@ def cmdline_status(args):
             if e.get('hopt_id'):
                 exp_id += '*'
             table_data.append([exp_id, e['name'], Status(e['status']).name, q, r, d, time.strftime(TIMEFORMAT, time.localtime(e['start_time'])), end_time])
+
+            if Status(e['status']) == Status.done:
+                if e['_id'] not in state['done']:
+                    state['done'].append(e['_id'])
+                    if not first_time:
+                        utils.notify('Experiment done', '{} ({})'.format(e['name'], exp_id))
+
         table_data_2 = [['Id', 'Name', 'Experiment', 'Start Time']]
         for h in hopts:
             table_data_2.append([h['_id'][:6], h['name'], h.get('experiment_id', '-')[:6], time.strftime(TIMEFORMAT, time.localtime(h['start_time']))])
@@ -361,15 +373,18 @@ def cmdline_status(args):
     if args.follow:
         utils.display_continuous(get_table, 1)
     else:
-        print(get_table())
+        print(get_table({}))
 
 
-def get_file_ids_for_experiment(experiment):
-    return list(itertools.chain.from_iterable(map(lambda c: map(lambda f: ObjectId(f), itertools.chain(c.get('files', []), c.get('resultfiles', []))), experiment['configs'])))
+def get_file_ids_for_experiment(experiment, with_configs=True):
+    # return list(itertools.chain.from_iterable(map(lambda c: map(lambda f: ObjectId(f), itertools.chain(c.get('files', []), c.get('resultfiles', []))), experiment['configs'])))
+    if with_configs:
+        return list(map(ObjectId, itertools.chain(itertools.chain.from_iterable(map(lambda c: c.get('resultfiles', []), experiment['configs'])), experiment['files'])))
+    return list(map(ObjectId, experiment['files']))
 
 
 def get_file_ids_for_config(config):
-    return list(map(lambda f: ObjectId(f), itertools.chain(config.get('files', []), config.get('resultfiles', []))))
+    return list(map(lambda f: ObjectId(f), config.get('resultfiles', [])))
 
 
 def delete_grid_files(file_ids):
@@ -381,7 +396,7 @@ def delete_grid_files(file_ids):
 
 
 def clean():
-    fileids = list(itertools.chain.from_iterable(map(get_file_ids_for_experiment, db.experiments.find({}, {'configs.files': 1, 'configs.resultfiles': 1}))))
+    fileids = list(itertools.chain.from_iterable(map(get_file_ids_for_experiment, db.experiments.find({}, {'files': 1, 'configs.resultfiles': 1}))))
     fileids += list(itertools.chain.from_iterable(map(get_file_ids_for_config, db.hyperopt.find({}, {'files': 1}))))
     orphans = grid.find({'_id': {'$nin': fileids}})
     return delete_grid_files([o._id for o in orphans])
@@ -392,18 +407,23 @@ def cmdline_clean(args):
 
 
 def export_experiment(experiment, path, configs=None, message=None):
+    efids = get_file_ids_for_experiment(experiment, False)
+    utils.load_file_tree(grid, path, files, raise_on_error=True)
+
     cfgs = experiment['configs']
     if configs:
         cfgs = [c for c in cfgs if c['_id'] in configs]
     for c in tqdm(cfgs):
-        export_config(c, os.path.join(path, c['_id']))
+        export_config(experiment, c, os.path.join(path, 'configs', c['_id']))
     if message is not None and len(message) > 0:
         with open(os.path.join(path, 'msg.txt'), 'w') as f:
             f.write(message)
 
 
-def export_config(config, path, exclude_patterns=[], include_patterns=[]):
+def export_config(experiment, config, path, exclude_patterns=[], include_patterns=[], with_experiment_files=False):
     files = get_file_ids_for_config(config)
+    if with_experiment_files:
+        files += get_file_ids_for_experiment(experiment, False)
     return utils.load_file_tree(grid, path, files, exclude_patterns=exclude_patterns, include_patterns=include_patterns, raise_on_error=False)
 
 
@@ -490,7 +510,7 @@ def tensorboard(experiment, port, checkpoints=False, info_only=False):
             if not checkpoints:
                 epat.append('.ckpt')
             epat.append('ext/')
-            export_config(c, cpath, exclude_patterns=epat)
+            export_config(experiment, c, cpath, exclude_patterns=epat)
             s = Status(c['status'])
             if s == Status.done:
                 done_configs.append(c)

@@ -185,11 +185,12 @@ def load_file_tree(grid, base_dir, file_ids, exclude_patterns=[], include_patter
     return files
 
 
-def display_continuous(str_func, interval=5):
+def display_continuous(str_func, interval=5, init_state=None):
+    state = init_state or dict()
     scr = curses.initscr()
     while(True):
         scr.clear()
-        scr.addstr(str_func())
+        scr.addstr(str_func(state))
         scr.refresh()
         try:
             time.sleep(interval)

@@ -166,7 +166,7 @@ def run_config(rat_config, experiment, config):
     with tempfile.TemporaryDirectory() as path:
         os.chdir(path)
 
-        utils.load_file_tree(grid, path, config['files'])
+        utils.load_file_tree(grid, path, experiment['files'])
 
         start_time = time.time()
         db.experiments.update({'_id': experiment['_id'], 'configs._id': config['_id']}, {'$set': {'configs.$.status': Status.running, 'status': Status.running, 'configs.$.host': host, 'configs.$.path': path, 'configs.$.start_time': start_time}})

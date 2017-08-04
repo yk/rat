@@ -36,6 +36,19 @@ def get_free_config_id(experiment):
 
 
 def run_config(experiment, config_id, configspec):
+    changes = [0]
+    while len(changes) > 0:
+        changes = []
+        for k, v in configspec.items():
+            if isinstance(v, str):
+                if '$(' in v:
+                    vbeg, vmid = v.split('$(', 1)
+                    vmid, vend = vmid.split(')', 1)
+                    vmid = configspec[vmid]
+                    changes.append((k, '{}{}{}'.format(vbeg, vmid, vend)))
+        for k, v in changes:
+            configspec[k] = v
+
     config = dict(spec=configspec)
     config['_id'] = config_id
     config['status'] = Status.enqueued
@@ -62,7 +75,15 @@ def restart_config(experiment, config):
     rerun_config(experiment, config)
 
 
-def run_experiment(configs, main_file, name=None, hopt_id=None, file_ids=None):
+def run_experiment(configs, main_file, name=None, hopt_id=None, file_ids=None, search_strategy=None, keep_best=-1):
+    if not isinstance(configs, list):
+        configs = [configs]
+    if search_strategy is None:
+        search_strategy = {
+                'create': 'raw',
+                'score': 'constant'
+                }
+        keep_best = -1
     exp_id = str(uuid.uuid4())
     name = name or os.getcwd().split('/')[-1]
     experiment = {
@@ -73,6 +94,8 @@ def run_experiment(configs, main_file, name=None, hopt_id=None, file_ids=None):
             'status': Status.enqueued,
             'main_file': main_file,
             'hopt_id': hopt_id,
+            'keep_best': keep_best,
+            'search_strategy': search_strategy,
             }
 
     cwd = os.getcwd()
@@ -379,7 +402,7 @@ def cmdline_status(args):
 def get_file_ids_for_experiment(experiment, with_configs=True):
     # return list(itertools.chain.from_iterable(map(lambda c: map(lambda f: ObjectId(f), itertools.chain(c.get('files', []), c.get('resultfiles', []))), experiment['configs'])))
     if with_configs:
-        return list(map(ObjectId, itertools.chain(itertools.chain.from_iterable(map(lambda c: c.get('resultfiles', []), experiment['configs'])), experiment['files'])))
+        return list(map(ObjectId, itertools.chain(itertools.chain.from_iterable(map(lambda c: c.get('resultfiles', []), experiment['configs'])), experiment.get('files', []))))
     return list(map(ObjectId, experiment['files']))
 
 

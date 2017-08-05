@@ -127,7 +127,7 @@ class HyperoptStrategyBase:
             if ss is not None:
                 return ss
 
-    def extract(self, config):
+    def extract(self, exp, config):
         values = {}
         extractors = self.get_extractors()
         if any([e.needs_export() for e in extractors]):
@@ -136,7 +136,7 @@ class HyperoptStrategyBase:
                 epat, _ = utils.exclude_include_patterns(config['spec'])
                 epat.append('.ckpt')
                 epat.append('ext/')
-                rat.export_config(config, path, exclude_patterns=epat)
+                rat.export_config(exp, config, path, exclude_patterns=epat)
                 for e in extractors:
                     values.update(e.extract(config, path))
         else:
@@ -144,22 +144,42 @@ class HyperoptStrategyBase:
                 values.update(e.extract(config))
         return values
 
+class ProdCreateStrategy:
+    def __init__(self, args, experiment, state, spec, history):
+        import confprod
+        if 'spec' not in state:
+            state['spec'] = confprod.generate_configurations(spec)
+        super().__init__(args, experiment, state, state['spec'], history)
+
+class SampleCreateStrategy:
+    def __init__(self, args, experiment, state, spec, history):
+        import confprod
+        sample_size = args.get('sample_size', -1)
+        if 'spec' not in state:
+            state['spec'] = confprod.generate_configurations(spec, sample_size)
+        super().__init__(args, experiment, state, state['spec'], history)
+
 
 class SummaryScalarStrategy:
     def get_extractors(self):
-        return [SummaryScalarExtractor([self.args['key']])]
+        return [SummaryScalarExtractor([self.args['score_key']])]
 
     def get_scorers(self):
-        return [SimpleValueScorer(self.args['key'], self.args.get('lower_is_better'))]
+        return [SimpleValueScorer(self.args['score_key'], self.args.get('lower_is_better', False))]
 
 
 
 def build_hyperopt_strategy(exp):
     definition, state, spec, history = exp['search_strategy'], exp['state'], exp['spec'], exp['history']
     bases = [HyperoptStrategyBase]
-    create = definition.get('create')
+    create = definition.get('create', 'raw')
     if create == 'raw':
         pass
+    elif create == 'prod':
+        bases.append(ProdCreateStrategy)
+    elif create == 'sample':
+        bases.append(SampleCreateStrategy)
+
     score = definition.get('score')
     if score == 'summary_scalar':
         bases.append(SummaryScalarStrategy)
@@ -190,6 +210,7 @@ def do_hyperopt_steps(experiment_id):
     did_step = True
     while did_step:
         did_step = do_hyperopt_step(experiment_id)
+        time.sleep(0.5)
 
 
 def do_hyperopt_step(exp_id):
@@ -203,6 +224,7 @@ def do_hyperopt_step(exp_id):
         return False
 
     configs_in_queue = len([c for c in exp['configs'] if c['status'] < Status.running])
+    configs_in_queue_or_running = len([c for c in exp['configs'] if c['status'] <= Status.running])
 
     if configs_in_queue >= exp['search_strategy'].get('queue_size', configs_in_queue + 1):
         logging.info('queue full')
@@ -210,10 +232,10 @@ def do_hyperopt_step(exp_id):
 
     search_strategy = build_hyperopt_strategy(exp)
 
-    new_done = [c for c in exp['configs'] if c['status'] >= Status.done and c['_id'] not in [h['_id'] for h in hopt['history']]]
+    new_done = [c for c in exp['configs'] if c['status'] >= Status.done and c['_id'] not in [h['_id'] for h in exp['history']]]
 
     for ndc in new_done:
-        hist_vals = search_strategy.extract(ndc)
+        hist_vals = search_strategy.extract(exp, ndc)
         hist_vals['_id'] = ndc['_id']
         hist_vals['spec'] = ndc['spec']
         logging.info('adding %s to history', hist_vals)
@@ -221,7 +243,7 @@ def do_hyperopt_step(exp_id):
         exp['history'].append(hist_vals)
         rat.db.experiments.update({'_id': exp['_id']}, {'$push': {'history': hist_vals}})
 
-    keep_best = exp.get('keep_best', -1)
+    keep_best = exp['search_strategy'].get('keep_best', -1)
     if keep_best > 0:
         best_ids = [h['_id'] for h in itt.islice(sorted(exp['history'], key=lambda h: search_strategy.score(h), reverse=True), keep_best)]
 
@@ -230,7 +252,7 @@ def do_hyperopt_step(exp_id):
                 logging.info('deleting config %s because it is not best', c)
                 rat.delete_config(exp, c)
 
-    if search_strategy.is_done():
+    if search_strategy.is_done() and configs_in_queue_or_running == 0:
         exp['search_status'] = SearchStatus.done
         rat.db.experiments.update({'_id': exp['_id']}, {'$set': {'search_status': exp['search_status']}})
         config = None

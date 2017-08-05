@@ -639,12 +639,12 @@ def main():
         parser_tb.set_defaults(func=cmdline_tb)
 
         parser_tb = subparsers.add_parser("step", help="do hopt step")
-        parser_tb.add_argument('search_string', nargs='*')
+        parser_tb.add_argument('search_strings', nargs='*')
         parser_tb.add_argument('-s', '--single', action='store_true', help="force only single step")
         parser_tb.set_defaults(func=cmdline_hopt_step)
 
         parser_tb = subparsers.add_parser("monitor", help="do hopt monitoring")
-        parser_tb.add_argument('search_string', nargs='*')
+        parser_tb.add_argument('search_strings', nargs='*')
         parser_tb.add_argument('-p', '--pause', type=int, default=5, help="seconds to pause")
         parser_tb.set_defaults(func=cmdline_hopt_monitor)
 

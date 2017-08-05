@@ -66,12 +66,15 @@ class SummaryScalarExtractor(ExportExtractor):
         self.average_over = average_over
 
     def extract(self, config, path, *args):
-        evts = read_tfevents(glob(os.path.join(path, 'logs') + '/*.tfevents.*')[0])
-        v = {}
-        for k in self.keys:
-            _, vs = extract_tfevent_scalar(evts, k)
-            v[k] = np.mean(vs[-self.average_over:])
-        return v
+        try:
+            evts = read_tfevents(glob(os.path.join(path, 'logs') + '/*.tfevents.*')[0])
+            v = {}
+            for k in self.keys:
+                _, vs = extract_tfevent_scalar(evts, k)
+                v[k] = np.mean(vs[-self.average_over:])
+            return v
+        except:
+            return dict((k, -np.inf) for k in self.keys)
 
 class Scorer:
     def score(self, extracted):
@@ -156,7 +159,7 @@ class SampleCreateStrategy:
         import confprod
         sample_size = args.get('sample_size', -1)
         if 'spec' not in state:
-            state['spec'] = confprod.generate_configurations(spec, sample_size)
+            state['spec'] = confprod.generate_configurations(spec, num_samples=sample_size)
         super().__init__(args, experiment, state, state['spec'], history)
 
 

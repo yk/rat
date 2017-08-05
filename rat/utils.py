@@ -33,6 +33,11 @@ def working_directory(path):
         os.chdir(prev_cwd)
 
 
+class SearchStatus(IntEnum):
+    enqueued = 1
+    running = 2
+    done = 3
+
 class Status(IntEnum):
     enqueued = 1
     running = 2
@@ -164,6 +169,7 @@ def save_file_tree(grid, base_dir, filenames, exclude_patterns=[], include_patte
 
 def load_file_tree(grid, base_dir, file_ids, exclude_patterns=[], include_patterns=[], raise_on_error=True):
     files = []
+    os.makedirs(os.path.abspath(base_dir), exist_ok=True)
     for fid in file_ids:
         try:
             gfile = grid.get(ensure_fid(fid))

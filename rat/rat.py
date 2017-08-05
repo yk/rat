@@ -13,7 +13,7 @@ import time
 from rat import worker
 from rat import utils
 from rat import hyperopt
-from rat.utils import Status
+from rat.utils import Status, SearchStatus
 from terminaltables import AsciiTable
 from multiprocessing import Process
 from threading import Thread
@@ -75,9 +75,9 @@ def restart_config(experiment, config):
     rerun_config(experiment, config)
 
 
-def run_experiment(configs, main_file, name=None, hopt_id=None, file_ids=None, search_strategy=None, keep_best=-1):
-    if not isinstance(configs, list):
-        configs = [configs]
+def run_experiment(spec, main_file, name=None, hopt_id=None, file_ids=None, search_strategy=None, keep_best=-1):
+    if not isinstance(spec, list):
+        spec = [spec]
     if search_strategy is None:
         search_strategy = {
                 'create': 'raw',
@@ -90,6 +90,8 @@ def run_experiment(configs, main_file, name=None, hopt_id=None, file_ids=None, s
             '_id': exp_id,
             'name': name,
             'configs': [],
+            'spec': spec,
+            'search_status': SearchStatus.enqueued,
             'start_time': time.time(),
             'status': Status.enqueued,
             'main_file': main_file,
@@ -100,7 +102,7 @@ def run_experiment(configs, main_file, name=None, hopt_id=None, file_ids=None, s
 
     cwd = os.getcwd()
     ls = utils.get_all_files(cwd)
-    epat, ipat = utils.exclude_include_patterns({})
+    epat, ipat = utils.exclude_include_patterns(spec[0])
     epat.append('ext/')
 
     if file_ids is None:
@@ -108,8 +110,7 @@ def run_experiment(configs, main_file, name=None, hopt_id=None, file_ids=None, s
 
     experiment['files'] = file_ids
     db.experiments.insert_one(experiment)
-    for cid, config in enumerate(configs):
-        run_config(experiment, str(cid), config)
+    hyperopt.do_hyperopt_steps(experiment['_id'])
     return experiment
 
 
@@ -169,13 +170,8 @@ def merge(experiments, name='merged'):
     db.experiments.insert_one(exp)
 
 
-def find_experiment(*args, **kwargs):
-    return find_entity('experiments', *args, **kwargs)
-
-def find_hyperopt(*args, **kwargs):
-    return find_entity('hyperopt', *args, **kwargs)
-
-def find_entity(collection_name, search_string, raise_if_none=True, allow_relative=False):
+def find_experiment(search_string, raise_if_none=True, allow_relative=False):
+    collection_name = 'experiments'
     if allow_relative and search_string and search_string.startswith('-'):
         n = int(search_string[1:])
         e = db[collection_name].find({}, sort=[('start_time', -1)], limit=n)
@@ -303,8 +299,25 @@ def cmdline_merge(args):
     merge(exps)
 
 
-def cmdline_hopt_step(hopt, args):
-    hyperopt.do_hyperopt_step(hopt)
+def get_hopt_experiment_ids(search_strings):
+    if len(search_strings) == 0:
+        exp_ids = [e['_id'] for e in db.experiments.find({'search_status': SearchStatus.running}, {'_id': 1})]
+    else:
+        exp_ids = [find_experiment(search_string, allow_relative=True)['_id'] for search_string in search_strings]
+    return exp_ids
+
+
+def cmdline_hopt_step(args):
+    exp_ids = get_hopt_experiment_ids(args.search_strings)
+    for eid in exp_ids:
+        if args.single:
+            hyperopt.do_hyperopt_step(eid)
+        else:
+            hyperopt.do_hyperopt_steps(eid)
+
+def cmdline_hopt_monitor(args):
+    exp_ids = get_hopt_experiment_ids(args.search_strings)
+    hyperopt.hyperopt_monitor(exp_ids, args.pause)
 
 def cmdline_delete_all(args):
     confirm()
@@ -333,10 +346,8 @@ def status(limit=10):
 
         e['cstats'] = cstats
 
-    hopts = db.hyperopt.find({}, limit=limit, sort=[('start_time', -1)])
-
     jobs = rqueue.jobs
-    return reversed(list(exps)), reversed(list(hopts)), jobs
+    return reversed(list(exps)), jobs
 
 
 TIMEFORMAT = '%d.%m. %H:%M:%S'
@@ -371,14 +382,14 @@ def cmdline_status(args):
         first_time = 'done' not in state
         if first_time:
             state['done'] = []
-        exps, hopts, jobs = status(args.limit)
+        exps, jobs = status(args.limit)
         table_data = [['Id', 'Name', 'Status', 'Q', 'R', 'D', 'Start Time', 'End Time']]
         for e in exps:
             cstats = e['cstats']
             q, r, d = cstats[Status.enqueued], cstats[Status.running], cstats[Status.done]
             end_time = time.strftime(TIMEFORMAT, time.localtime(e['end_time'])) if 'end_time' in e else '-'
             exp_id = e['_id'][:6]
-            if e.get('hopt_id'):
+            if not e.get('search_status', SearchStatus.done) >= SearchStatus.done:
                 exp_id += '*'
             table_data.append([exp_id, e['name'], Status(e['status']).name, q, r, d, time.strftime(TIMEFORMAT, time.localtime(e['start_time'])), end_time])
 
@@ -388,10 +399,7 @@ def cmdline_status(args):
                     if not first_time:
                         utils.notify('Experiment done', '{} ({})'.format(e['name'], exp_id))
 
-        table_data_2 = [['Id', 'Name', 'Experiment', 'Start Time']]
-        for h in hopts:
-            table_data_2.append([h['_id'][:6], h['name'], h.get('experiment_id', '-')[:6], time.strftime(TIMEFORMAT, time.localtime(h['start_time']))])
-        return AsciiTable(table_data).table + '\n' + AsciiTable(table_data_2).table + '\n' + '{} jobs in queue'.format(len(jobs))
+        return AsciiTable(table_data).table + '\n' + '{} jobs in queue'.format(len(jobs))
 
     if args.follow:
         utils.display_continuous(get_table, 1)
@@ -431,7 +439,7 @@ def cmdline_clean(args):
 
 def export_experiment(experiment, path, configs=None, message=None):
     efids = get_file_ids_for_experiment(experiment, False)
-    utils.load_file_tree(grid, path, files, raise_on_error=True)
+    utils.load_file_tree(grid, path, efids, raise_on_error=True)
 
     cfgs = experiment['configs']
     if configs:
@@ -527,7 +535,7 @@ def tensorboard(experiment, port, checkpoints=False, info_only=False):
         for c in experiment['configs']:
             remove_common_attributes(c, common_attrs)
             # cpath = os.path.join(path, c['_id'])
-            cpath = os.path.join(path, utils.dict_to_list(c['spec']), c['_id'])
+            cpath = os.path.join(path, utils.dict_to_list(c['spec']).replace('/', '__'), c['_id'])
             # export_config(c, cpath, ['model', 'latest'])
             epat, _ = utils.exclude_include_patterns(c['spec'])
             if not checkpoints:
@@ -669,20 +677,19 @@ def main():
         parser_tb.add_argument('-i', '--info_only', action='store_true', help="only print common attributes")
         parser_tb.set_defaults(func=cmdline_tb)
 
+        parser_tb = subparsers.add_parser("step", help="do hopt step")
+        parser_tb.add_argument('search_string', nargs='*')
+        parser_tb.add_argument('-s', '--single', action='store_true', help="force only single step")
+        parser_tb.set_defaults(func=cmdline_hopt_step)
 
-        parser_hopt = subparsers.add_parser("hopt", help="do hyperoptimization")
-        parser_hopt.add_argument('search_string', type=str, help="hopt id")
-        hoptparsers = parser_hopt.add_subparsers(dest="hoptcommand", help="hopt command")
-
-        parser_hopt_step = hoptparsers.add_parser("step", help="do hopt step")
-        parser_hopt_step.set_defaults(func=cmdline_hopt_step)
+        parser_tb = subparsers.add_parser("monitor", help="do hopt monitoring")
+        parser_tb.add_argument('search_string', nargs='*')
+        parser_tb.add_argument('-p', '--pause', type=int, default=5, help="seconds to pause")
+        parser_tb.set_defaults(func=cmdline_hopt_monitor)
 
         args = parser.parse_args()
 
-        if args.command == 'hopt':
-            hopt = find_hyperopt(args.search_string, allow_relative=True)
-            args.func(hopt, args)
-        elif hasattr(args, 'func'):
+        if hasattr(args, 'func'):
             args.func(args)
         else:
             parser.parse_args(['-h'])

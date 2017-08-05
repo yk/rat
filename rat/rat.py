@@ -98,6 +98,8 @@ def run_experiment(spec, main_file, name=None, hopt_id=None, file_ids=None, sear
             'hopt_id': hopt_id,
             'keep_best': keep_best,
             'search_strategy': search_strategy,
+            'state': {},
+            'history': [],
             }
 
     cwd = os.getcwd()
@@ -112,47 +114,6 @@ def run_experiment(spec, main_file, name=None, hopt_id=None, file_ids=None, sear
     db.experiments.insert_one(experiment)
     hyperopt.do_hyperopt_steps(experiment['_id'])
     return experiment
-
-
-def get_experiment_for_hyperopt(hopt):
-    exp = None
-    if 'experiment_id' in hopt:
-        exp = db.experiments.find_one(hopt['experiment_id'])
-    if exp is None:
-        exp = run_experiment([], hopt['main_file'], name='ho_' + hopt['name'], hopt_id=hopt['_id'])
-        db.hyperopt.update({'_id': hopt['_id']}, {'$set': {'experiment_id': exp['_id']}})
-    return exp
-
-
-def run_hyperopt(hyperopt_spec, search_strategy, main_file, queue_size=1, keep_best=3, name=None):
-    hopt_id = str(uuid.uuid4())
-    name = name or os.getcwd().split('/')[-1]
-
-    cwd = os.getcwd()
-    ls = utils.get_all_files(cwd)
-    epat, ipat = utils.exclude_include_patterns(hyperopt_spec)
-    epat.append('ext/')
-
-    file_ids = utils.save_file_tree(grid, cwd, ls, exclude_patterns=epat, include_patterns=ipat)
-
-    hopt = {
-        '_id': hopt_id,
-        'name': name,
-        'start_time': time.time(),
-        'spec': hyperopt_spec,
-        'search_strategy': search_strategy,
-        'state': {},
-        'history': [],
-        'main_file': main_file,
-        'files': file_ids,
-        'queue_size': queue_size,
-        'keep_best': keep_best,
-        }
-
-    db.hyperopt.insert_one(hopt)
-
-    exp = get_experiment_for_hyperopt(hopt)
-
 
 
 def merge(experiments, name='merged'):

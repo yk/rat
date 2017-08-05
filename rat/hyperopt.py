@@ -4,7 +4,7 @@ from glob import glob
 import os
 from rat import worker
 from rat import utils
-from rat.utils import Status
+from rat.utils import Status, SearchStatus
 import logging
 import tempfile
 import numpy as np
@@ -101,14 +101,14 @@ class HyperoptStrategyBase:
         return list(set([c['spec'] for c in self.experiment['configs']] + [h['spec'] for h in self.history]))
 
     def get_next_config(self):
-        idx = state.get('idx', 0)
+        idx = self.state.get('idx', 0)
         if idx < len(self.spec):
             c = self.spec[idx]
-            state['idx'] = idx + 1
+            self.state['idx'] = idx + 1
             return c
 
     def is_done(self):
-        return state.get('idx', 0) >= len(self.spec)
+        return self.state.get('idx', 0) >= len(self.spec)
             
 
     def get_extractors(self):
@@ -167,7 +167,7 @@ def build_hyperopt_strategy(exp):
         pass
     class HyperoptStrategy(*bases[::-1]):
         pass
-    strategy = HyperoptStrategy(definition.get('args', {}), experiment, state, spec, history)
+    strategy = HyperoptStrategy(definition.get('args', {}), exp, state, spec, history)
     return strategy
 
 

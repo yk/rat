@@ -148,7 +148,7 @@ class ProdCreateStrategy:
     def __init__(self, args, experiment, state, spec, history):
         import confprod
         if 'spec' not in state:
-            state['spec'] = confprod.generate_configurations(spec)
+            state['spec'] = confprod.generate_configurations(spec, shuffle=args.get('shuffle', False))
         super().__init__(args, experiment, state, state['spec'], history)
 
 class SampleCreateStrategy:

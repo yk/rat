@@ -277,8 +277,19 @@ def cmdline_hopt_step(args):
             hyperopt.do_hyperopt_steps(eid)
 
 def cmdline_hopt_monitor(args):
-    exp_ids = get_hopt_experiment_ids(args.search_strings)
-    hyperopt.hyperopt_monitor(exp_ids, args.pause)
+    hyperopt_monitor(args.search_strings, args.pause)
+
+
+def hyperopt_monitor(search_strings, pause=10):
+    try:
+        print('monitoring...')
+        while True:
+            exp_ids = get_hopt_experiment_ids(search_strings)
+            for eid in exp_ids:
+                hyperopt.do_hyperopt_steps(eid)
+            time.sleep(pause)
+    except KeyboardInterrupt:
+        print('aborting monitor')
 
 def cmdline_delete_all(args):
     confirm()

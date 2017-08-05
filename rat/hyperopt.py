@@ -195,15 +195,6 @@ class HyperoptWorker(worker.ConditionTermWorker):
     pass
 
 
-def hyperopt_monitor(experiment_ids, pause=10):
-    try:
-        print('monitoring...')
-        while True:
-            for eid in experiment_ids:
-                do_hyperopt_steps(eid)
-            time.sleep(pause)
-    except KeyboardInterrupt:
-        print('aborting monitor')
 
 
 def do_hyperopt_steps(experiment_id):

@@ -240,7 +240,7 @@ def do_hyperopt_step(exp_id):
 
         for c in exp['configs']:
             if c['status'] >= Status.done and c['_id'] not in best_ids:
-                logging.info('deleting config %s because it is not best', c)
+                logging.info('deleting config %s: %s because it is not best', c['_id'], c['spec'])
                 rat.delete_config(exp, c)
 
     if search_strategy.is_done() and configs_in_queue_or_running == 0:

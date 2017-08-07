@@ -75,11 +75,11 @@ class SummaryScalarValueExtractor(ExportExtractor):
                 if self.at_step >= 0:
                     if self.at_step > steps[-1]:
                         raise Exception()
-                    idx = np.argmax(steps >= self.at_step)
+                    idx = np.argmax(np.asarray(steps) >= self.at_step)
                 else:
                     if -self.at_step > steps[-1]:
                         raise Exception()
-                    idx = np.argmax(steps > steps[-1] + self.at_step)
+                    idx = np.argmax(np.asarra(steps) > steps[-1] + self.at_step)
                 v[k] = np.mean(vs[idx - self.average_over - 1:])
             return v
         except:
@@ -132,14 +132,14 @@ class ThresholdScorer(Scorer):
         if steps_vs is None:
             return -np.inf
         steps, vs = steps_vs
-        if self.after_steps > steps[-1]:
+        if self.after_steps > np.asarray(steps[-1]):
             return -np.inf
-        idx = np.argmax(steps >= self.after_steps)
+        idx = np.argmax(np.asarray(steps) >= self.after_steps)
         steps, vs = steps[idx:], vs[idx:]
         if self.lower_is_better:
-            idxs = np.where(vs < self.threshold)[0]
+            idxs = np.where(np.asarray(vs) < self.threshold)[0]
         else:
-            idxs = np.where(vs > self.threshold)[0]
+            idxs = np.where(np.asarray(vs) > self.threshold)[0]
         if len(idxs) == 0:
             return -np.inf
         return idxs[0]

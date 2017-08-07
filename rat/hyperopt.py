@@ -221,7 +221,7 @@ def do_hyperopt_step(exp_id):
     configs_in_queue_or_running = len([c for c in exp['configs'] if c['status'] <= Status.running])
 
     if configs_in_queue >= exp['search_strategy'].get('queue_size', configs_in_queue + 1):
-        logging.info('queue full')
+        logging.debug('queue full')
         return
 
     search_strategy = build_hyperopt_strategy(exp)

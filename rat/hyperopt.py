@@ -124,9 +124,13 @@ class ThresholdExtractor(ExportExtractor):
 
     def extract(self, config, path, *args):
         try:
+            print('aaa')
             evts = self.get_tfevents(path)
+            print('bbb')
             steps, vs = extract_tfevent_scalar(evts, self.key)
+            print('ccc')
             idx = get_step_index(steps, self.after_steps)
+            print('ddd')
             steps, vs = steps[idx:], vs[idx:]
             if self.high_to_low:
                 idxs = np.where(np.asarray(vs) < self.threshold)[0]

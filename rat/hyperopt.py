@@ -60,21 +60,47 @@ class ExportExtractor(Extractor):
     def needs_export(self):
         return True
 
-class SummaryScalarExtractor(ExportExtractor):
-    def __init__(self, keys, average_over=3):
+class SummaryScalarValueExtractor(ExportExtractor):
+    def __init__(self, keys, average_over=3, at_step=-1):
         self.keys = keys
         self.average_over = average_over
+        self.at_step = at_step
 
     def extract(self, config, path, *args):
         try:
             evts = read_tfevents(glob(os.path.join(path, 'logs') + '/*.tfevents.*')[0])
             v = {}
             for k in self.keys:
-                _, vs = extract_tfevent_scalar(evts, k)
-                v[k] = np.mean(vs[-self.average_over:])
+                steps, vs = extract_tfevent_scalar(evts, k)
+                if self.at_step >= 0:
+                    if self.at_step > steps[-1]:
+                        raise Exception()
+                    idx = np.argmax(steps >= self.at_step)
+                else:
+                    if -self.at_step > steps[-1]:
+                        raise Exception()
+                    idx = np.argmax(steps > steps[-1] + self.at_step)
+                v[k] = np.mean(vs[idx - self.average_over - 1:])
             return v
         except:
             return dict((k, -np.inf) for k in self.keys)
+
+
+class SummaryScalarSeriesExtractor(ExportExtractor):
+    def __init__(self, keys):
+        self.keys = keys
+
+    def extract(self, config, path, *args):
+        try:
+            evts = read_tfevents(glob(os.path.join(path, 'logs') + '/*.tfevents.*')[0])
+            v = {}
+            for k in self.keys:
+                steps, vs = extract_tfevent_scalar(evts, k)
+                v[k] = (steps, vs)
+            return v
+        except:
+            return dict((k, None) for k in self.keys)
+
 
 class Scorer:
     def score(self, extracted):
@@ -92,6 +118,28 @@ class SimpleValueScorer(Scorer):
         return s
 
 
+class ThresholdScorer(Scorer):
+    def __init__(self, key, threshold, lower_is_better=False, after_steps=0):
+        self.key = key
+        self.threshold = threshold
+        self.lower_is_better = lower_is_better
+        self.after_steps = after_steps
+
+    def score(self, extracted):
+        steps, vs = extracted.get(self.key, None)
+        if self.after_steps > steps[-1]:
+            return -np.inf
+        idx = np.argmax(steps >= self.after_steps)
+        steps, vs = steps[idx:], vs[idx:]
+        if self.lower_is_better:
+            idxs = np.where(vs < self.threshold)[0]
+        else:
+            idxs = np.where(vs > self.threshold)[0]
+        if len(idxs) == 0:
+            return -np.inf
+        return idxs[0]
+
+
 class HyperoptStrategyBase:
     def __init__(self, args, experiment, state, spec, history):
         self.args = args
@@ -101,7 +149,7 @@ class HyperoptStrategyBase:
         self.history = history
 
     def get_running_or_done_specs(self):
-        return list([c['spec'] for c in self.experiment['configs']] + [h['spec'] for h in self.history])
+        return [c['spec'] for c in self.experiment['configs']] + [h['spec'] for h in self.history]
 
     def get_next_config(self):
         idx = self.state.get('idx', 0)
@@ -177,10 +225,18 @@ class SampleCreateStrategy:
 
 class SummaryScalarStrategy:
     def get_extractors(self):
-        return [SummaryScalarExtractor([self.args['score_key']])]
+        return [SummaryScalarValueExtractor([self.args['score_key']])]
 
     def get_scorers(self):
         return [SimpleValueScorer(self.args['score_key'], self.args.get('lower_is_better', False))]
+
+
+class ThresholdScoreStrategy:
+    def get_extractors(self):
+        return [SummaryScalarSeriesExtractor([self.args['score_key']])]
+
+    def get_scorers(self):
+        return [ThresholdScorer(self.args['score_key'], self.args['threshold'], lower_is_better=self.args.get('lower_is_better', False), after_steps=self.args.get('after_steps', 0))]
 
 
 
@@ -198,6 +254,8 @@ def build_hyperopt_strategy(exp):
     score = definition.get('score')
     if score == 'summary_scalar':
         bases.append(SummaryScalarStrategy)
+    elif score == 'threshold':
+        bases.append(ThresholdScoreStrategy)
     elif score == 'constant':
         pass
     class HyperoptStrategy(*bases[::-1]):

@@ -96,6 +96,8 @@ class SummaryScalarSeriesExtractor(ExportExtractor):
             v = {}
             for k in self.keys:
                 steps, vs = extract_tfevent_scalar(evts, k)
+                if len(steps) == 0:
+                    raise Exception()
                 v[k] = (steps, vs)
             return v
         except:
@@ -126,7 +128,10 @@ class ThresholdScorer(Scorer):
         self.after_steps = after_steps
 
     def score(self, extracted):
-        steps, vs = extracted.get(self.key, None)
+        steps_vs = extracted.get(self.key, None)
+        if steps_vs is None:
+            return -np.inf
+        steps, vs = steps_vs
         if self.after_steps > steps[-1]:
             return -np.inf
         idx = np.argmax(steps >= self.after_steps)

@@ -91,7 +91,7 @@ class SummaryScalarValueExtractor(ExportExtractor):
                 steps, vs = extract_tfevent_scalar(evts, k)
                 idx = get_step_index(steps, self.at_step)
                 idx = max(idx - self.average_over - 1, 0)
-                v[k] = np.mean(vs[idx:])
+                v[k] = float(np.mean(vs[idx:]))
             return v
         except:
             return dict((k, None) for k in self.keys)
@@ -132,10 +132,10 @@ class ThresholdExtractor(ExportExtractor):
                 idxs = np.where(np.asarray(vs) < self.threshold)[0]
             else:
                 idxs = np.where(np.asarray(vs) > self.threshold)[0]
-            if not idxs:
+            if len(idxs) == 0:
                 val = None
             else:
-                val = idxs[0]
+                val = float(idxs[0])
             return {self.key: val}
         except:
             return {self.key: None}

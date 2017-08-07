@@ -143,7 +143,8 @@ class ThresholdExtractor(ExportExtractor):
                 val = float(idxs[0])
             print(val)
             return {self.key: val}
-        except:
+        except Exception as e:
+            print(e)
             return {self.key: None}
 
 

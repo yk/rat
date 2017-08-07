@@ -238,7 +238,7 @@ def kill_config(experiment, config):
 
 
 def kill(experiment, delete_after=False, keep_files_on_delete=False):
-    db.experiments.update({'_id': experiment['_id']}, {'$set': {'status': Status.killing}})
+    db.experiments.update({'_id': experiment['_id']}, {'$set': {'status': Status.killing, 'search_status': SearchStatus.done}})
     for j in rqueue.jobs:
         exp_args = j.args[1]
         if exp_args['_id'] == experiment['_id']:

@@ -155,12 +155,24 @@ class ProdCreateStrategy:
         super().__init__(args, experiment, state, state['spec'], history)
 
 class SampleCreateStrategy:
-    def __init__(self, args, experiment, state, spec, history):
-        import confprod
-        sample_size = args.get('sample_size', -1)
-        if 'spec' not in state:
-            state['spec'] = confprod.generate_configurations(spec, num_samples=sample_size)
-        super().__init__(args, experiment, state, state['spec'], history)
+    def __init__(self, args, *argz, **kwargz):
+        super().__init__(args, *argz, **kwargz)
+        self.sample_size = args.get('sample_size', -1)
+        self.reschedule = args.get('reschedule', False)
+
+    def is_done(self):
+        return self.sample_size >= 0 and self.state.get('idx', 0) >= self.sample_size
+
+    def get_next_config(self):
+        idx = self.state.get('idx', 0)
+        if not self.is_done():
+            import confprod
+            for _ in range(100):
+                c = confprod.generate_configurations(self.spec, num_samples=1)[0]
+                if self.reschedule or c not in self.get_running_or_done_specs():
+                    self.state['idx'] = idx + 1
+                    return c
+
 
 
 class SummaryScalarStrategy:

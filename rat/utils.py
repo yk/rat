@@ -42,6 +42,7 @@ class Status(IntEnum):
     enqueued = 1
     running = 2
     done = 3
+    killing = 89
     killed = 90
     error = 95
 
@@ -50,6 +51,7 @@ class Status(IntEnum):
                 Status.enqueued: 'Q',
                 Status.running: 'R',
                 Status.done: 'D',
+                Status.killing: 'k',
                 Status.killed: 'K',
                 Status.error: 'E',
             }

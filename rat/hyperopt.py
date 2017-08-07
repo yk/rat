@@ -71,7 +71,8 @@ class ValueExtractor(Extractor):
 
 class ExportExtractor(Extractor):
     def get_tfevents(self, path):
-            evts = read_tfevents(glob(os.path.join(path, 'logs') + '/*.tfevents.*')[0])
+        evts = read_tfevents(glob(os.path.join(path, 'logs') + '/*.tfevents.*')[0])
+        return evts
 
     def needs_export(self):
         return True

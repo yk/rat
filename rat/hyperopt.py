@@ -142,7 +142,7 @@ class ThresholdScorer(Scorer):
             idxs = np.where(np.asarray(vs) > self.threshold)[0]
         if len(idxs) == 0:
             return -np.inf
-        return idxs[0]
+        return -idxs[0]
 
 
 class HyperoptStrategyBase:

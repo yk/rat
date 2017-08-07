@@ -7,5 +7,5 @@ setup(name='rat',
         description='Experiments',
         author='yk',
         packages=find_packages(exclude=("bin",)),
-        install_requires=['numpy', 'scipy', 'rq', 'pymongo', 'rcfile', 'terminaltables', 'sh', 'tqdm', 'dill'],
+        install_requires=['numpy', 'scipy', 'rq', 'pymongo', 'rcfile', 'terminaltables', 'sh', 'tqdm', 'dill', 'tensorflow'],
         )

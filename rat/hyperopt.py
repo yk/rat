@@ -37,6 +37,19 @@ def extract_tfevent_image(summaries, tag):
     return extract_tfevent_values(summaries, tag, lambda v: v.image.encoded_image_string)
 
 
+class StepException(Exception):
+    pass
+
+
+def get_step_index(steps, step):
+    if step >= 0:
+        if step > steps[-1]:
+            raise StepException()
+        return np.argmax(np.asarray(steps) >= step)
+    if -step > steps[-1]:
+        raise StepException()
+    return np.argmax(np.asarray(steps) >= steps[-1] + step + 1)
+
 
 class Extractor:
     def needs_export(self):
@@ -57,6 +70,9 @@ class ValueExtractor(Extractor):
         return v
 
 class ExportExtractor(Extractor):
+    def get_tfevents(self, path):
+            evts = read_tfevents(glob(os.path.join(path, 'logs') + '/*.tfevents.*')[0])
+
     def needs_export(self):
         return True
 
@@ -72,33 +88,9 @@ class SummaryScalarValueExtractor(ExportExtractor):
             v = {}
             for k in self.keys:
                 steps, vs = extract_tfevent_scalar(evts, k)
-                if self.at_step >= 0:
-                    if self.at_step > steps[-1]:
-                        raise Exception()
-                    idx = np.argmax(np.asarray(steps) >= self.at_step)
-                else:
-                    if -self.at_step > steps[-1]:
-                        raise Exception()
-                    idx = np.argmax(np.asarra(steps) > steps[-1] + self.at_step)
-                v[k] = np.mean(vs[idx - self.average_over - 1:])
-            return v
-        except:
-            return dict((k, -np.inf) for k in self.keys)
-
-
-class SummaryScalarSeriesExtractor(ExportExtractor):
-    def __init__(self, keys):
-        self.keys = keys
-
-    def extract(self, config, path, *args):
-        try:
-            evts = read_tfevents(glob(os.path.join(path, 'logs') + '/*.tfevents.*')[0])
-            v = {}
-            for k in self.keys:
-                steps, vs = extract_tfevent_scalar(evts, k)
-                if len(steps) == 0:
-                    raise Exception()
-                v[k] = (steps, vs)
+                idx = get_step_index(steps, self.at_step)
+                idx = max(idx - self.average_over - 1, 0)
+                v[k] = np.mean(vs[idx:])
             return v
         except:
             return dict((k, None) for k in self.keys)
@@ -114,35 +106,38 @@ class SimpleValueScorer(Scorer):
         self.lower_is_better = lower_is_better
     
     def score(self, extracted):
-        s = extracted.get(self.key, -np.inf)
-        if self.lower_is_better:
+        s = extracted.get(self.key, None)
+        if s is None:
+            s = -np.inf
+        elif self.lower_is_better:
             s = -s
         return s
 
 
-class ThresholdScorer(Scorer):
-    def __init__(self, key, threshold, lower_is_better=False, after_steps=0):
+class ThresholdExtractor(ExportExtractor):
+    def __init__(self, key, threshold, high_to_low=False, after_steps=0):
         self.key = key
         self.threshold = threshold
-        self.lower_is_better = lower_is_better
         self.after_steps = after_steps
+        self.high_to_low = high_to_low
 
-    def score(self, extracted):
-        steps_vs = extracted.get(self.key, None)
-        if steps_vs is None:
-            return -np.inf
-        steps, vs = steps_vs
-        if self.after_steps > np.asarray(steps[-1]):
-            return -np.inf
-        idx = np.argmax(np.asarray(steps) >= self.after_steps)
-        steps, vs = steps[idx:], vs[idx:]
-        if self.lower_is_better:
-            idxs = np.where(np.asarray(vs) < self.threshold)[0]
-        else:
-            idxs = np.where(np.asarray(vs) > self.threshold)[0]
-        if len(idxs) == 0:
-            return -np.inf
-        return -idxs[0]
+    def extract(self, config, path, *args):
+        try:
+            evts = self.get_tfevents(path)
+            steps, vs = extract_tfevent_scalar(evts, self.key)
+            idx = get_step_index(steps, self.after_steps)
+            steps, vs = steps[idx:], vs[idx:]
+            if self.high_to_low:
+                idxs = np.where(np.asarray(vs) < self.threshold)[0]
+            else:
+                idxs = np.where(np.asarray(vs) > self.threshold)[0]
+            if not idxs:
+                val = None
+            else:
+                val = idxs[0]
+            return {self.key: val}
+        except:
+            return {self.key: None}
 
 
 class HyperoptStrategyBase:
@@ -238,10 +233,10 @@ class SummaryScalarStrategy:
 
 class ThresholdScoreStrategy:
     def get_extractors(self):
-        return [SummaryScalarSeriesExtractor([self.args['score_key']])]
+        return [ThresholdExtractor(self.args['score_key'], self.args['threshold'], high_to_low=self.args.get('high_to_low', False), after_steps=self.args.get('after_steps', 0))]
 
     def get_scorers(self):
-        return [ThresholdScorer(self.args['score_key'], self.args['threshold'], lower_is_better=self.args.get('lower_is_better', False), after_steps=self.args.get('after_steps', 0))]
+        return [SimpleValueScorer(self.args['score_key'], self.args.get('lower_is_better', True))]
 
 
 

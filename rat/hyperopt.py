@@ -132,10 +132,12 @@ class ThresholdExtractor(ExportExtractor):
                 idxs = np.where(np.asarray(vs) < self.threshold)[0]
             else:
                 idxs = np.where(np.asarray(vs) > self.threshold)[0]
+            print(idxs)
             if len(idxs) == 0:
                 val = None
             else:
                 val = float(idxs[0])
+            print(val)
             return {self.key: val}
         except:
             return {self.key: None}

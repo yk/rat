@@ -238,15 +238,15 @@ def tail_remote_file(host, remote_path, local_path, interval=5):
 
 
 def dict_to_flags(d : dict):
-    return " ".join(['--{0}={2}{1}{2}'.format(k, v, '' if isinstance(v, str) else '') for k, v in d.items() if not k == 'main_file'])
+    return " ".join(sorted(['--{0}={2}{1}{2}'.format(k, v, '' if isinstance(v, str) else '') for k, v in d.items() if not k == 'main_file']))
 
 
 def dict_to_list(d: dict):
-    return " ".join(['{0}={2}{1}{2}'.format(k, v, '' if isinstance(v, str) else '') for k, v in d.items() if not k == 'main_file'])
+    return " ".join(sorted(['{0}={2}{1}{2}'.format(k, v, '' if isinstance(v, str) else '') for k, v in d.items() if not k == 'main_file']))
 
 
 def dict_to_with(d : dict):
-    return " ".join(['with {}="{}"'.format(k, v) for k, v in d.items()])
+    return " ".join(sorted(['with {}="{}"'.format(k, v) for k, v in d.items()]))
 
 
 def configs_equal(c1: dict, c2: dict):

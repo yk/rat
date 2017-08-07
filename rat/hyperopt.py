@@ -101,7 +101,7 @@ class HyperoptStrategyBase:
         self.history = history
 
     def get_running_or_done_specs(self):
-        return list(set([c['spec'] for c in self.experiment['configs']] + [h['spec'] for h in self.history]))
+        return list([c['spec'] for c in self.experiment['configs']] + [h['spec'] for h in self.history])
 
     def get_next_config(self):
         idx = self.state.get('idx', 0)

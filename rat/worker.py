@@ -171,9 +171,10 @@ def run_config(rat_config, experiment, config):
         start_time = time.time()
         db.experiments.update({'_id': experiment['_id'], 'configs._id': config['_id']}, {'$set': {'configs.$.status': Status.running, 'status': Status.running, 'configs.$.host': host, 'configs.$.path': path, 'configs.$.start_time': start_time}})
         main_file = experiment['main_file']
+        run_cmd = experiment.get('command', 'python3')
         # utils.system_call('python3 {} > stdout.txt 2> stderr.txt'.format(main_file))
         flags = utils.dict_to_flags(config['spec'])
-        cmd = 'python3 {} {}'.format(main_file, flags)
+        cmd = '{} {} {}'.format(run_cmd, main_file, flags)
         logging.info(cmd)
         cmd_log_path = os.path.join(path, 'cmdlog.txt')
         with open(cmd_log_path, 'w') as f:

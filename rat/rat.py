@@ -75,7 +75,7 @@ def restart_config(experiment, config):
     rerun_config(experiment, config)
 
 
-def run_experiment(spec, main_file, name=None, hopt_id=None, file_ids=None, search_strategy=None, keep_best=-1):
+def run_experiment(spec, main_file, name=None, file_ids=None, search_strategy=None, command='python3'):
     if not isinstance(spec, list):
         spec = [spec]
     if search_strategy is None:
@@ -83,7 +83,6 @@ def run_experiment(spec, main_file, name=None, hopt_id=None, file_ids=None, sear
                 'create': 'raw',
                 'score': 'constant'
                 }
-        keep_best = -1
     exp_id = str(uuid.uuid4())
     name = name or os.getcwd().split('/')[-1]
     experiment = {
@@ -95,11 +94,10 @@ def run_experiment(spec, main_file, name=None, hopt_id=None, file_ids=None, sear
             'start_time': time.time(),
             'status': Status.enqueued,
             'main_file': main_file,
-            'hopt_id': hopt_id,
-            'keep_best': keep_best,
             'search_strategy': search_strategy,
             'state': {},
             'history': [],
+            'command': command,
             }
 
     cwd = os.getcwd()

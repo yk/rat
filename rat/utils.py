@@ -77,7 +77,7 @@ def system_call(cmd, raise_on_error=True):
 
 
 def async_system_call(cmd):
-    p = subprocess.Popen(cmd.strip().split(' '), cwd=os.getcwd())
+    p = subprocess.Popen(cmd.strip().split(' '), cwd=os.getcwd(), shell=True, executable='/bin/bash')
     return p
 
 

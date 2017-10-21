@@ -183,6 +183,11 @@ def kill_all(name=None, limit=0, delete_after=False, force=False):
     return nd
 
 
+def trim():
+    for e in list(db.experiments.find({'status': Status.enqueued})):
+        kill(e, delete_after=True)
+
+
 def delete(experiment, keep_files=False):
     if not keep_files:
         orphans = get_file_ids_for_experiment(experiment)
@@ -300,6 +305,9 @@ def cmdline_kill_all(args):
     nd = kill_all(name=args.name, limit=args.limit, delete_after=args.delete, force=args.force)
     print('killed {} experiments'.format(nd))
     clean()
+
+def cmdline_trim(args):
+    trim()
 
 def status(limit=10):
     exps = db.experiments.find({}, limit=limit, sort=[('start_time', -1)])
@@ -633,6 +641,9 @@ def main():
         parser_kill_all.add_argument('-l', '--limit', type=int, default=0, help="limit")
         parser_kill_all.add_argument('-f', '--force', action='store_true', help="do not confirm")
         parser_kill_all.set_defaults(func=cmdline_kill_all)
+
+        parser_trim = subparsers.add_parser("trim", help="kill and delete enqueued experiments")
+        parser_trim.set_defaults(func=cmdline_trim)
 
         parser_export = subparsers.add_parser("export", help="export an experiment")
         parser_export.add_argument('search_string')

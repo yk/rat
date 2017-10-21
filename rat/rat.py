@@ -184,7 +184,7 @@ def kill_all(name=None, limit=0, delete_after=False, force=False):
 
 
 def trim():
-    for e in list(db.experiments.find({'status': Status.enqueued})):
+    for e in list(db.experiments.find({'status': Status.enqueued}).sort('start_time', pymongo.DESCENDING)):
         kill(e, delete_after=True)
 
 

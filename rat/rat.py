@@ -23,6 +23,7 @@ import hashlib
 from collections import Counter
 from tqdm import tqdm
 import pymongo
+import numpy as np
 
 rat_config = rcfile('rat')
 db, grid = utils.get_mongo(rat_config)
@@ -78,6 +79,8 @@ def restart_config(experiment, config):
 def run_experiment(spec, main_file, name=None, file_ids=None, search_strategy=None, command='python3'):
     if not isinstance(spec, list):
         spec = [spec]
+    spec = [{k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in s.items()} for s in spec]
+
     if search_strategy is None:
         search_strategy = {
                 'create': 'raw',

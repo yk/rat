@@ -76,7 +76,7 @@ def restart_config(experiment, config):
     rerun_config(experiment, config)
 
 
-def run_experiment(spec, main_file, name=None, file_ids=None, search_strategy=None, command='python3'):
+def run_experiment(spec, main_file, name=None, file_ids=None, search_strategy=None, command='python3', step_after=True):
     if not isinstance(spec, list):
         spec = [spec]
     spec = [{k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in s.items()} for s in spec]
@@ -113,7 +113,8 @@ def run_experiment(spec, main_file, name=None, file_ids=None, search_strategy=No
 
     experiment['files'] = file_ids
     db.experiments.insert_one(experiment)
-    hyperopt.do_hyperopt_steps(experiment['_id'])
+    if step_after:
+        hyperopt.do_hyperopt_steps(experiment['_id'])
     return experiment
 
 

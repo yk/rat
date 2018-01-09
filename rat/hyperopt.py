@@ -268,8 +268,8 @@ def build_hyperopt_strategy(exp):
 class HyperoptWorker(worker.ConditionTermWorker):
     pass
 
-
-
+def init_hyperopt(experiment_id):
+    did_step = do_hyperopt_step(experiment_id, force=True)
 
 def do_hyperopt_steps(experiment_id):
     did_step = True
@@ -278,11 +278,14 @@ def do_hyperopt_steps(experiment_id):
         time.sleep(0.5)
 
 
-def do_hyperopt_step(exp_id):
+def do_hyperopt_step(exp_id, force=False):
     logging.root.setLevel(logging.INFO)
     from rat import rat
 
     exp = rat.find_experiment(exp_id)
+
+    if not force and not exp.get('search_init', True):
+        return False
 
     search_status = exp.get('search_status', SearchStatus.done)
     if  search_status >= SearchStatus.done:
@@ -327,7 +330,7 @@ def do_hyperopt_step(exp_id):
             rat.db.experiments.update({'_id': exp['_id']}, {'$set': {'search_status': exp['search_status']}})
         config = search_strategy.get_next_config()
 
-    rat.db.experiments.update({'_id': exp['_id']}, {'$set': {'state': search_strategy.state}})
+    rat.db.experiments.update({'_id': exp['_id']}, {'$set': {'state': search_strategy.state, 'search_init': True}})
 
     if config:
         logging.info('scheduling next config %s', config)

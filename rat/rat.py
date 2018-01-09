@@ -94,6 +94,7 @@ def run_experiment(spec, main_file, name=None, file_ids=None, search_strategy=No
             'configs': [],
             'spec': spec,
             'search_status': SearchStatus.enqueued,
+            'search_init': False,
             'start_time': time.time(),
             'status': Status.enqueued,
             'main_file': main_file,
@@ -113,6 +114,7 @@ def run_experiment(spec, main_file, name=None, file_ids=None, search_strategy=No
 
     experiment['files'] = file_ids
     db.experiments.insert_one(experiment)
+    hyperopt.init_hyperopt(experiment['_id'])
     if step_after:
         hyperopt.do_hyperopt_steps(experiment['_id'])
     return experiment

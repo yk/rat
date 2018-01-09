@@ -270,6 +270,7 @@ class HyperoptWorker(worker.ConditionTermWorker):
 
 def init_hyperopt(experiment_id):
     did_step = do_hyperopt_step(experiment_id, force=True)
+    time.sleep(0.5)
 
 def do_hyperopt_steps(experiment_id):
     did_step = True

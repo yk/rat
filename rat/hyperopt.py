@@ -108,7 +108,7 @@ class SimpleValueScorer(Scorer):
     
     def score(self, extracted):
         s = extracted.get(self.key, None)
-        if s is None:
+        if s is None or np.isnan(s) or np.isinf(s):
             s = -np.inf
         elif self.lower_is_better:
             s = -s

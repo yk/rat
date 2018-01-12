@@ -24,6 +24,7 @@ from collections import Counter
 from tqdm import tqdm
 import pymongo
 import numpy as np
+import json
 
 rat_config = rcfile('rat')
 db, grid = utils.get_mongo(rat_config)
@@ -55,7 +56,7 @@ def run_config(experiment, config_id, configspec):
     config['status'] = Status.enqueued
     db.experiments.update({'_id': experiment['_id']}, {'$push': {'configs': config}})
 
-    rqueue.enqueue(worker.run_config, rat_config, experiment, config, timeout=30 * 24 * 60 * 60)
+    rqueue.enqueue(worker.run_config, rat_config, experiment, config, timeout=30 * 24 * 60 * 60, description=json.dumps(configspec))
 
 
 def get_config(experiment, config_id):

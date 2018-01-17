@@ -12,6 +12,7 @@ from rq.version import VERSION
 from rq.worker import WorkerStatus
 from rq.worker import StopRequested
 import sh
+import sys
 
 # logging.root.setLevel(logging.DEBUG)
 
@@ -185,11 +186,29 @@ def run_config(rat_config, experiment, config):
             process.terminate()
 
         signal.signal(signal.SIGTERM, handler)
-        try:
-            process.wait()
-        except Exception as e:
-            # process.kill()
-            process.terminate()
+        stdout_path = os.path.join(path, 'stdout.txt')
+        stderr_path = os.path.join(path, 'stderr.txt')
+        with open(stdout_path, 'w') as stdoutf, open(stderr_path, 'w') as stderrf:
+            try:
+                while True:
+                    l = process.stdout.readline()
+                    if len(l) > 0:
+                        stdoutf.write(l)
+                        sys.stdout.write(l)
+                        continue
+                    l = process.stderr.readline()
+                    if len(l) > 0:
+                        stderrf.write(l)
+                        sys.stderr.write(l)
+                        continue
+                    if process.poll() is not None:
+                        break
+                    time.sleep(.5)
+                # process.wait()
+            except Exception as e:
+                logging.warning(e.msg)
+                # process.kill()
+                process.terminate()
 
         end_time = time.time()
 

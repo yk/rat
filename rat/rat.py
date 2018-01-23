@@ -25,6 +25,7 @@ from tqdm import tqdm
 import pymongo
 import numpy as np
 import json
+import sh
 
 rat_config = rcfile('rat')
 db, grid = utils.get_mongo(rat_config)
@@ -441,7 +442,15 @@ def export_config(experiment, config, path, exclude_patterns=[], include_pattern
     files = get_file_ids_for_config(config)
     if with_experiment_files:
         files += get_file_ids_for_experiment(experiment, False)
-    return utils.load_file_tree(grid, path, files, exclude_patterns=exclude_patterns, include_patterns=include_patterns, raise_on_error=False)
+    res = utils.load_file_tree(grid, path, files, exclude_patterns=exclude_patterns, include_patterns=include_patterns, raise_on_error=False)
+    logpath = os.path.join(res, 'logs')
+    if os.path.exists(logpath) and os.path.isdir(logpath):
+        for txt in ('cmdlog', 'stdout', 'stderr'):
+            txt = txt + '.txt'
+            fn = os.path.join(path, txt)
+            if os.path.exists(fn):
+                sh.cp(fn, logpath)
+    return res
 
 
 def cmdline_export(args):

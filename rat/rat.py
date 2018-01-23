@@ -443,7 +443,7 @@ def export_config(experiment, config, path, exclude_patterns=[], include_pattern
     if with_experiment_files:
         files += get_file_ids_for_experiment(experiment, False)
     res = utils.load_file_tree(grid, path, files, exclude_patterns=exclude_patterns, include_patterns=include_patterns, raise_on_error=False)
-    logpath = os.path.join(res, 'logs')
+    logpath = os.path.join(path, 'logs')
     if os.path.exists(logpath) and os.path.isdir(logpath):
         for txt in ('cmdlog', 'stdout', 'stderr'):
             txt = txt + '.txt'

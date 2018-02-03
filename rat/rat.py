@@ -516,7 +516,7 @@ def remove_common_attributes(config, common_attributes):
             del config['spec'][cc]
 
 
-def tensorboard(experiment, port, checkpoints=False, info_only=False, done_only=False):
+def tensorboard(experiment, port, checkpoints=False, info_only=False, done_only=False, running_only=False):
     with tempfile.TemporaryDirectory() as path:
         done_configs = []
         not_done_configs = []
@@ -538,7 +538,7 @@ def tensorboard(experiment, port, checkpoints=False, info_only=False, done_only=
             epat.append('ext/')
             export_config(experiment, c, cpath, exclude_patterns=epat)
             s = Status(c['status'])
-            if s == Status.done:
+            if s == Status.done and not running_only:
                 done_configs.append(c)
             elif s < Status.done:
                 not_done_configs.append((c, cpath))
@@ -585,7 +585,7 @@ def cmdline_tb(args):
         exp = find_latest_running_or_done_experiment()
     else:
         exp = find_experiment(args.search_string, allow_relative=True)
-    tensorboard(exp, port, args.checkpoints, args.info_only, done_only=args.done)
+    tensorboard(exp, port, args.checkpoints, args.info_only, done_only=args.done, running_only=args.running)
 
 
 def confirm(prompt='Really?'):
@@ -675,6 +675,7 @@ def main():
         parser_tb.add_argument('-c', '--checkpoints', action='store_true', help="also sync checkpoints")
         parser_tb.add_argument('-i', '--info_only', action='store_true', help="only print common attributes")
         parser_tb.add_argument('-d', '--done', action='store_true', help="only show done configs")
+        parser_tb.add_argument('-r', '--running', action='store_true', help="only show running configs")
         parser_tb.set_defaults(func=cmdline_tb)
 
         parser_tb = subparsers.add_parser("step", help="do hopt step")

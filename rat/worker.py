@@ -13,6 +13,7 @@ from rq.worker import WorkerStatus
 from rq.worker import StopRequested
 import sh
 import sys
+import select
 
 # logging.root.setLevel(logging.DEBUG)
 
@@ -190,22 +191,35 @@ def run_config(rat_config, experiment, config):
         stderr_path = os.path.join(path, 'stderr.txt')
         with open(stdout_path, 'w') as stdoutf, open(stderr_path, 'w') as stderrf:
             try:
-                while True:
+                poller = select.poll()
+
+                poller.register(process.stdout, select.POLLIN)
+                poller.register(process.stderr, select.POLLIN)
+
+                def read_stdout():
                     l = process.stdout.readline()
                     if len(l) > 0:
                         stdoutf.write(l)
                         sys.stdout.write(l)
-                        sys.stdout.flush()
-                        continue
+                    return len(l)
+
+                def read_stderr():
                     l = process.stderr.readline()
                     if len(l) > 0:
                         stderrf.write(l)
                         sys.stderr.write(l)
-                        sys.stderr.flush()
-                        continue
-                    if process.poll() is not None:
-                        break
-                    time.sleep(.5)
+                    return len(l)
+
+                while process.poll() is not None:
+                    for (fn, _) in poller.poll(0):
+                        if fn == process.stdout.fileno():
+                            read_stdout()
+                        elif fn == process.stderr.fileno():
+                            read_stderr()
+                while read_stdout():
+                    pass
+                while read_stderr():
+                    pass
                 # process.wait()
             except Exception as e:
                 logging.warning(e.msg)

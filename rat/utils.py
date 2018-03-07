@@ -15,6 +15,7 @@ import subprocess
 import contextlib
 import json
 import sh
+import shlex
 
 mongo_client = None
 
@@ -77,7 +78,8 @@ def system_call(cmd, raise_on_error=True):
 
 
 def async_system_call(cmd):
-    p = subprocess.Popen(cmd, cwd=os.getcwd(), executable='/bin/bash', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    cmd = shlex.split(cmd)
+    p = subprocess.Popen(cmd, cwd=os.getcwd(), executable='/bin/bash', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, bufsize=1)
     return p
 
 

@@ -79,7 +79,7 @@ def system_call(cmd, raise_on_error=True):
 
 def async_system_call(cmd):
     # cmd = shlex.split(cmd)
-    p = subprocess.Popen(cmd, cwd=os.getcwd(), executable='/bin/bash', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=False, bufsize=1)
+    p = subprocess.Popen(cmd, cwd=os.getcwd(), executable='/bin/bash', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, bufsize=1)
     return p
 
 

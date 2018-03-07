@@ -210,7 +210,7 @@ def run_config(rat_config, experiment, config):
                         sys.stderr.write(l)
                     return len(l)
 
-                while process.poll() is not None:
+                while process.poll() is None:
                     for (fn, _) in poller.poll(0):
                         if fn == process.stdout.fileno():
                             read_stdout()

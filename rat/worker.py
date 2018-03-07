@@ -188,7 +188,7 @@ def run_config(rat_config, experiment, config):
         signal.signal(signal.SIGTERM, handler)
         stdout_path = os.path.join(path, 'stdout.txt')
         stderr_path = os.path.join(path, 'stderr.txt')
-        with open(stdout_path, 'w') as stdoutf, open(stderr_path, 'w') as stderrf:
+        with open(stdout_path, 'wb') as stdoutf, open(stderr_path, 'wb') as stderrf:
             try:
                 while True:
                     l = process.stdout.readline()

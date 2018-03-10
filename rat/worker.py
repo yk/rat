@@ -210,16 +210,22 @@ def run_config(rat_config, experiment, config):
                         sys.stderr.write(l)
                     return len(l)
 
-                while process.poll() is None:
+                process_running = True
+                while True:
+                    read_lines = 0
                     for (fn, _) in poller.poll(0):
                         if fn == process.stdout.fileno():
-                            read_stdout()
+                            read_lines += read_stdout()
                         elif fn == process.stderr.fileno():
-                            read_stderr()
-                while read_stdout():
-                    pass
-                while read_stderr():
-                    pass
+                            read_lines += read_stderr()
+                    if read_lines == 0 and not process_running:
+                        break
+                    process_running = process.poll() is None
+
+                # while read_stdout():
+                    # pass
+                # while read_stderr():
+                    # pass
                 # process.wait()
             except Exception as e:
                 logging.warning(e.msg)

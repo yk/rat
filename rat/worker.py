@@ -14,6 +14,7 @@ from rq.worker import StopRequested
 import sh
 import sys
 import select
+import fcntl
 
 # logging.root.setLevel(logging.DEBUG)
 

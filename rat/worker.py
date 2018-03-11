@@ -186,46 +186,36 @@ def run_config(rat_config, experiment, config):
         def handler(signum, frame):
             process.terminate()
 
+        def non_block_read(instream, outstream, outfile):
+            fd = instream.fileno()
+            fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+            fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+            try:
+                while True:
+                    l = instream.read(1024)
+                    if l is not None and len(l) > 0:
+                        l = l.decode()
+                        outstream.write(l)
+                        outfile.write(l)
+                    else:
+                        time.sleep(.1)
+                        break
+            except Exception as e:
+                logging.warn(e)
+                pass
+
         signal.signal(signal.SIGTERM, handler)
         stdout_path = os.path.join(path, 'stdout.txt')
         stderr_path = os.path.join(path, 'stderr.txt')
         with open(stdout_path, 'w') as stdoutf, open(stderr_path, 'w') as stderrf:
             try:
-                poller = select.poll()
+                while process.poll() is None:
+                    non_block_read(process.stdout, sys.stdout, stdoutf)
+                    non_block_read(process.stderr, sys.stderr, stderrf)
 
-                poller.register(process.stdout, select.POLLIN)
-                poller.register(process.stderr, select.POLLIN)
+                non_block_read(process.stdout, sys.stdout, stdoutf)
+                non_block_read(process.stderr, sys.stderr, stderrf)
 
-                def read_stdout():
-                    l = process.stdout.readline()
-                    if len(l) > 0:
-                        stdoutf.write(l)
-                        sys.stdout.write(l)
-                    return len(l)
-
-                def read_stderr():
-                    l = process.stderr.readline()
-                    if len(l) > 0:
-                        stderrf.write(l)
-                        sys.stderr.write(l)
-                    return len(l)
-
-                process_running = True
-                while True:
-                    read_lines = 0
-                    for (fn, _) in poller.poll(0):
-                        if fn == process.stdout.fileno():
-                            read_lines += read_stdout()
-                        elif fn == process.stderr.fileno():
-                            read_lines += read_stderr()
-                    if read_lines == 0 and not process_running:
-                        break
-                    process_running = process.poll() is None
-
-                # while read_stdout():
-                    # pass
-                # while read_stderr():
-                    # pass
                 # process.wait()
             except Exception as e:
                 logging.warning(e.msg)

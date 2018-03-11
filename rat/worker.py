@@ -218,7 +218,7 @@ def run_config(rat_config, experiment, config):
 
                 # process.wait()
             except Exception as e:
-                logging.warning(e.msg)
+                logging.warning(e)
                 # process.kill()
                 process.terminate()
 

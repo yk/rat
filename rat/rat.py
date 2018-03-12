@@ -239,7 +239,7 @@ def kill_config(experiment, config):
             continue
         if j is None: continue
         if j.args[1]['_id'] == experiment['_id'] and j.args[2]['_id'] == config['_id']:
-            cmd = "ssh -q {} 'rkill $(pgrep -P {})'".format(config['host'], w.name.split('.')[-1])
+            cmd = "ssh -q {} 'kill $(pgrep -P {})'".format(config['host'], w.name.split('.')[-1])
             try:
                 utils.system_call(cmd, raise_on_error=True)
             except:

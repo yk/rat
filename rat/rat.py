@@ -585,6 +585,7 @@ def cmdline_tb(args):
         exp = find_latest_running_or_done_experiment()
     else:
         exp = find_experiment(args.search_string, allow_relative=True)
+    del sys.argv[1:]
     tensorboard(exp, port, args.checkpoints, args.info_only, done_only=args.done, running_only=args.running)
 
 

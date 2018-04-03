@@ -469,6 +469,11 @@ def cmdline_export(args):
         export_experiment(exp, path, configs=configs, message=args.message)
 
 
+def cmdline_stats(args):
+    exp = find_experiment(args.search_string, allow_relative=True)
+    hyperopt.do_hyperopt_stats(exp)
+
+
 def wait_and_tail_logs(experiment, config, cpath, checkpoints=False):
     # config = utils.wait_for_running(db, experiment['_id'], config['_id'])
     if config['status'] < Status.running: return
@@ -688,6 +693,11 @@ def main():
         parser_tb.add_argument('search_strings', nargs='*')
         parser_tb.add_argument('-p', '--pause', type=int, default=5, help="seconds to pause")
         parser_tb.set_defaults(func=cmdline_hopt_monitor)
+
+        parser_export = subparsers.add_parser("stats", help="stats about an experiment")
+        parser_export.add_argument('search_string')
+        parser_export.set_defaults(func=cmdline_stats)
+
 
         args = parser.parse_args()
 

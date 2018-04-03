@@ -10,6 +10,7 @@ import tempfile
 import numpy as np
 import itertools as itt
 import time
+from scipy.stats import spearmanr
 
 
 def read_tfevents(fn):
@@ -339,3 +340,32 @@ def do_hyperopt_step(exp_id, force=False):
         return True
     else:
         return False
+
+
+def do_hyperopt_stats(exp):
+    search_strategy = build_hyperopt_strategy(exp)
+    if not len(exp['history']):
+        print('no history')
+        return
+    fkeys = list(sorted(exp['history'][0]['spec'].keys()))
+    fvals = {fk: set() for fk in fkeys}
+    for h in exp['history']:
+        for fk, fv in h['spec'].items():
+            fvals[fk].add(fv)
+    fmap = {}
+    for fk, fv in fvals.items():
+        fmap[fk] = dict((v, i) for i, v in enumerate(sorted(fv)))
+    features = []
+    scores = []
+    for h in exp['history']:
+        scores.append(search_strategy.score(h))
+        features.append([fmap[fk][h['spec'][fk]] for fk in fkeys])
+
+    features, scores = map(np.array, (features, scores))
+    for fki, fk in enumerate(fkeys):
+        if len(fmap[fk]) == 1:
+            continue
+        print(fk)
+        print(spearmanr(features[:, fki], scores))
+        print(fmap[fk])
+        print()

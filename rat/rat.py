@@ -312,7 +312,7 @@ def cmdline_delete_all(args):
 def cmdline_kill_all(args):
     nd = kill_all(name=args.name, limit=args.limit, delete_after=args.delete, force=args.force)
     print('killed {} experiments'.format(nd))
-    clean()
+    clean(limit=args.batch)
 
 def cmdline_trim(args):
     trim()
@@ -413,11 +413,16 @@ def delete_grid_files(file_ids):
     return no
 
 
-def clean():
+def clean(limit=None):
     fileids = list(itertools.chain.from_iterable(map(get_file_ids_for_experiment, db.experiments.find({}, {'files': 1, 'configs.resultfiles': 1}))))
     fileids += list(itertools.chain.from_iterable(map(get_file_ids_for_config, db.hyperopt.find({}, {'files': 1}))))
-    orphans = grid.find({'_id': {'$nin': fileids}})
-    return delete_grid_files([o._id for o in orphans])
+    num_del = 0
+    orphans = True
+    while orphans:
+        orphans = grid.find({'_id': {'$nin': fileids}}, limit=limit)
+        if orphans:
+            num_del += delete_grid_files([o._id for o in orphans])
+    return num_del
 
 def cmdline_clean(args):
     num_del = clean()
@@ -697,6 +702,10 @@ def main():
         parser_export = subparsers.add_parser("stats", help="stats about an experiment")
         parser_export.add_argument('search_string')
         parser_export.set_defaults(func=cmdline_stats)
+
+        parser_tb = subparsers.add_parser("clean", help="clean up saved experiments")
+        parser_tb.add_argument('-b', '--batch', type=int, default=None, help="if set, delete in batches of this size")
+        parser_tb.set_defaults(func=cmdline_clean)
 
 
         args = parser.parse_args()

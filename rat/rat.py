@@ -413,7 +413,7 @@ def delete_grid_files(file_ids):
     return no
 
 
-def clean(limit=None):
+def clean(limit=0):
     fileids = list(itertools.chain.from_iterable(map(get_file_ids_for_experiment, db.experiments.find({}, {'files': 1, 'configs.resultfiles': 1}))))
     fileids += list(itertools.chain.from_iterable(map(get_file_ids_for_config, db.hyperopt.find({}, {'files': 1}))))
     num_del = 0
@@ -704,7 +704,7 @@ def main():
         parser_export.set_defaults(func=cmdline_stats)
 
         parser_tb = subparsers.add_parser("clean", help="clean up saved experiments")
-        parser_tb.add_argument('-b', '--batch', type=int, default=None, help="if set, delete in batches of this size")
+        parser_tb.add_argument('-b', '--batch', type=int, default=0, help="if set, delete in batches of this size")
         parser_tb.set_defaults(func=cmdline_clean)
 
 

@@ -667,6 +667,7 @@ def main():
         parser_kill_all.add_argument('-n', '--name', default=None, help="kill by name")
         parser_kill_all.add_argument('-l', '--limit', type=int, default=0, help="limit")
         parser_kill_all.add_argument('-f', '--force', action='store_true', help="do not confirm")
+        parser_kill_all.add_argument('-b', '--batch', type=int, default=0, help="if set, delete in batches of this size")
         parser_kill_all.set_defaults(func=cmdline_kill_all)
 
         parser_trim = subparsers.add_parser("trim", help="kill and delete enqueued experiments")

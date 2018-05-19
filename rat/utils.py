@@ -96,7 +96,7 @@ def sleepecho(s):
 def get_all_files(directory):
     ls = []
     for e in os.listdir(directory):
-        if e.startswith('.') or e.startswith('~') or e.startswith('_'):
+        if e.startswith('.') or e.startswith('~') or (e.startswith('_') and not e.startswith('__')):
             continue
         eabs = os.path.join(directory, e)
         if os.path.isfile(eabs):

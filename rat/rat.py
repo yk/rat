@@ -429,13 +429,15 @@ def cmdline_clean(args):
     print('{} orphans deleted'.format(num_del))
 
 
-def export_experiment(experiment, path, configs=None, message=None):
+def export_experiment(experiment, path, configs=None, message=None, only_done=False):
     efids = get_file_ids_for_experiment(experiment, False)
     utils.load_file_tree(grid, path, efids, raise_on_error=True)
 
     cfgs = experiment['configs']
     if configs:
         cfgs = [c for c in cfgs if c['_id'] in configs]
+    if only_done:
+        cfgs = [c for c in cfgs if c['status'] == Status.done]
     for c in tqdm(cfgs):
         export_config(experiment, c, os.path.join(path, 'configs', c['_id']))
     if message is not None and len(message) > 0:
@@ -465,7 +467,7 @@ def cmdline_export(args):
         configs = args.configs.split(',')
     if args.temp:
         with tempfile.TemporaryDirectory() as path:
-            export_experiment(exp, path, configs=configs, message=args.message)
+            export_experiment(exp, path, configs=configs, message=args.message, only_done=args.done)
             utils.system_call('open ' + path)
             print('>', end=' ')
             sys.stdin.read(1)
@@ -678,6 +680,7 @@ def main():
         parser_export.add_argument('-p', '--path', help="the directory to export to", default='.')
         parser_export.add_argument('-m', '--message', help="message to write into the folder", default=None)
         parser_export.add_argument('-c', '--configs', help="comma separated list of configs to export", default=None)
+        parser_export.add_argument('-d', '--done', help="export only done configs", action='store_true')
         parser_export.add_argument('-t', '--temp', action='store_true', help='export to a temporary folder')
         parser_export.set_defaults(func=cmdline_export)
 

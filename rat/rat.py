@@ -473,7 +473,7 @@ def cmdline_export(args):
             sys.stdin.read(1)
     else:
         path = args.path
-        export_experiment(exp, path, configs=configs, message=args.message)
+        export_experiment(exp, path, configs=configs, message=args.message, only_done=args.done)
 
 
 def cmdline_stats(args):

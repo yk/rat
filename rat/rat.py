@@ -149,10 +149,10 @@ def find_experiment(search_string, raise_if_none=True, allow_relative=False):
     e = db[collection_name].find({'_id': {'$regex': '^{}'.format(search_string)}})
     s = e.count()
     if s > 1:
-        raise Exception('Ambiguous search string: {}'.format(search_string))
+        raise ValueError('Ambiguous search string: {}'.format(search_string))
     if s < 1:
         if raise_if_none:
-            raise Exception('Search string {} not found'.format(search_string))
+            raise ValueError('Search string {} not found'.format(search_string))
         return None
     return next(e)
 
@@ -164,7 +164,7 @@ def find_latest_running_or_done_experiment():
 def find_experiment_id(search_string, raise_if_none=True):
     e = db.experiments.find_one({'_id': {'$regex': '^{}'.format(search_string)}}, {'_id': 1})
     if raise_if_none and not e:
-        raise Exception('Experiment {} not found'.format(search_string))
+        raise ValueError('Experiment {} not found'.format(search_string))
     return e
 
 def delete_all():
@@ -296,9 +296,12 @@ def hyperopt_monitor(search_strings, pause=10):
     try:
         print('monitoring...')
         while True:
-            exp_ids = get_hopt_experiment_ids(search_strings)
-            for eid in exp_ids:
-                hyperopt.do_hyperopt_steps(eid)
+            try:
+                exp_ids = get_hopt_experiment_ids(search_strings)
+                for eid in exp_ids:
+                    hyperopt.do_hyperopt_steps(eid)
+            except ValueError as e:
+                logging.warn(e)
             time.sleep(pause)
     except KeyboardInterrupt:
         print('aborting monitor')

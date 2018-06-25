@@ -362,10 +362,13 @@ def do_hyperopt_stats(exp):
         features.append([fmap[fk][h['spec'][fk]] for fk in fkeys])
 
     features, scores = map(np.array, (features, scores))
+    outputs = []
     for fki, fk in enumerate(fkeys):
         if len(fmap[fk]) == 1:
             continue
+        outputs.append((fk, spearmanr(features[:, fki], scores), fmap[fk]))
+    for fk, sr, fm in sorted(outputs, key=lambda o: o[1].pvalue):
         print(fk)
-        print(spearmanr(features[:, fki], scores))
-        print(fmap[fk])
+        print(sr)
+        print(fm)
         print()

@@ -563,14 +563,15 @@ def tensorboard(experiment, port, checkpoints=False, info_only=False, done_only=
 
         with utils.working_directory(path):
             import tensorflow as tf
-            from tensorboard.main import main as tbmain
+            from tensorboard.main import run_main as tbmain
             from tensorboard.plugins.projector.projector_plugin import ProjectorPlugin
-            flags = tf.app.flags.FLAGS
-            flags.port = port
+            flags = {}
+            flags['port'] = port
             # done_configs_logdirs = [utils.dict_to_list(c['spec']) + ':' + os.path.join(c['_id'], 'logs') for c in (done_configs + not_done_configs)]
             # flags.logdir = ",".join(done_configs_logdirs)
-            flags.logdir = '.'
-            flags.reload_interval = 10
+            flags['logdir'] = '.'
+            flags['reload_interval'] = 10
+            sys.argv.extend(utils.dict_to_flags(flags).split())
             try:
                 print('running tensorboard in {}'.format(path))
 

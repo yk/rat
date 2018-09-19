@@ -26,7 +26,6 @@ import pymongo
 import numpy as np
 import json
 import sh
-from glob import glob
 
 rat_config = rcfile('rat')
 db, grid = utils.get_mongo(rat_config)
@@ -563,10 +562,6 @@ def tensorboard(experiment, port, checkpoints=False, info_only=False, done_only=
             sync_configs(experiment, not_done_configs, checkpoints=checkpoints)
 
         with utils.working_directory(path):
-            for dirname in glob('./*'):
-                if not list(glob('{}/*/**/events.*'.format(dirname))):
-                    logging.info('removing {} because there is no events file'.format(dirname))
-                    sh.rm('-r', '-f', dirname)
             import tensorflow as tf
             from tensorboard.main import run_main as tbmain
             from tensorboard.plugins.projector.projector_plugin import ProjectorPlugin

@@ -211,6 +211,7 @@ class SampleCreateStrategy:
         self.reschedule = args.get('reschedule', False)
 
     def is_done(self):
+        import confprod
         if self.state.get('idx', 0) >= confprod.number_of_configs(self.spec):
             return True
         if self.sample_size >= 0 and self.state.get('idx', 0) >= self.sample_size:

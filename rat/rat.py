@@ -57,7 +57,7 @@ def run_config(experiment, config_id, configspec):
     config['status'] = Status.enqueued
     db.experiments.update({'_id': experiment['_id']}, {'$push': {'configs': config}})
 
-    rqueue.enqueue(worker.run_config, rat_config, experiment, config, timeout=30 * 24 * 60 * 60, description=json.dumps(configspec))
+    rqueue.enqueue(worker.run_config, rat_config, experiment, config, job_timeout=30 * 24 * 60 * 60, description=json.dumps(configspec))
 
 
 def get_config(experiment, config_id):

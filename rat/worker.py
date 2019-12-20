@@ -60,7 +60,7 @@ class ConditionTermWorker(TermWorker):
     def after_execute(self):
         pass
 
-    def work(self, burst=False, logging_level="INFO"):
+    def work(self, burst=False, logging_level="INFO", **kwargs):
         setup_loghandlers(logging_level)
         self._install_signal_handlers()
 

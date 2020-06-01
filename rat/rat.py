@@ -40,7 +40,7 @@ def get_free_config_id(experiment):
     return str(max([int(c['_id']) for c in experiment['configs']] + [-1]) + 1)
 
 
-def run_config(experiment, config_id, configspec, job_timeout=None):
+def run_config(experiment, config_id, configspec):
     changes = [0]
     while len(changes) > 0:
         changes = []
@@ -59,8 +59,8 @@ def run_config(experiment, config_id, configspec, job_timeout=None):
     config['status'] = Status.enqueued
     db.experiments.update({'_id': experiment['_id']}, {'$push': {'configs': config}})
 
-    rqueue.enqueue(worker.run_config, rat_config, experiment, config, job_timeout=30 * 24 * 60 * 60, description=json.dumps(configspec))
-    # rqueue.enqueue(worker.run_config, rat_config, experiment, config, description=json.dumps(configspec))
+    # rqueue.enqueue(worker.run_config, rat_config, experiment, config, job_timeout=30 * 24 * 60 * 60, description=json.dumps(configspec))
+    rqueue.enqueue(worker.run_config, rat_config, experiment, config, description=json.dumps(configspec))
 
 
 def get_config(experiment, config_id):

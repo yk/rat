@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import pickle
-pickle.HIGHEST_PROTOCOL = 4
+# pickle.HIGHEST_PROTOCOL = 4
 from rcfile import rcfile
 import tempfile
 import curses
